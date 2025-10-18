@@ -1,0 +1,136 @@
+spec:
+  name: Onboarding & Free Trial Flow
+  description: Post-login onboarding modal guiding users through plan selection and starting a free trial. Supports transition to paid Stripe subscriptions.
+
+  scenarios:
+    - name: User logs in and sees onboarding modal (shadcn Dialog)
+      steps:
+        - login_as: "newuser@example.com"
+        - navigate: "/dashboard"
+        - expect:
+            contains:
+              - "Welcome, newuser@example.com"
+              - "Start your free trial"
+            visible:
+              - "[data-testid='onboarding-modal']"          # shadcn/ui Dialog container
+              - "[role='dialog']"                            # accessibility role
+            note: "Onboarding modal MUST use shadcn/ui Dialog component."
+
+    - name: Free plan selection completes onboarding and creates trial subscription
+      steps:
+        - click: "[data-testid='plan-free']"
+        - click: "[data-testid='continue-button']"
+        - expect:
+            contains:
+              - "You're on the Free Trial plan"
+            not_visible:
+              - "[data-testid='onboarding-modal']"
+        - verify_db:
+            collection: "users"
+            query: { email: "newuser@example.com" }
+            expect:
+              plan: "free"
+              onboardingCompleted: true
+        - verify_db:
+            collection: "subscriptions"
+            query: { email: "newuser@example.com" }
+            expect:
+              plan: "free"
+              status: "trial"
+
+    - name: Starter plan selection (paid) through onboarding
+      steps:
+        - login_as: "newuser@example.com"
+        - navigate: "/dashboard"
+        - click: "[data-testid='plan-starter']"
+        - click: "[data-testid='continue-button']"
+        - expect:
+            redirected_to: "stripe.com/checkout"
+        - action: "complete Stripe checkout"
+        - expect:
+            url: "/dashboard"
+            contains:
+              - "You're now on the Pro plan"  # Post-checkout indicates active paid plan
+        - verify_db:
+            collection: "subscriptions"
+            query: { email: "newuser@example.com" }
+            expect:
+              plan: "pro"
+              status: "active"
+
+    - name: Core plan selection (paid) through onboarding
+      steps:
+        - login_as: "newuser@example.com"
+        - navigate: "/dashboard"
+        - click: "[data-testid='plan-core']"
+        - click: "[data-testid='continue-button']"
+        - expect:
+            redirected_to: "stripe.com/checkout"
+        - action: "complete Stripe checkout"
+        - expect:
+            url: "/dashboard"
+            contains:
+              - "You're now on the Pro plan"
+        - verify_db:
+            collection: "subscriptions"
+            query: { email: "newuser@example.com" }
+            expect:
+              plan: "pro"
+              status: "active"
+
+    - name: User upgrades from free to pro during trial
+      steps:
+        - login_as: "newuser@example.com"
+        - navigate: "/dashboard/billing"
+        - click: "[data-testid='upgrade-pro-button']"
+        - expect:
+            redirected_to: "stripe.com/checkout"
+        - action: "complete Stripe checkout"
+        - expect:
+            url: "/dashboard/billing"
+            contains: 
+              - "You're now on the Pro plan"
+        - verify_db:
+            collection: "subscriptions"
+            query: { email: "newuser@example.com" }
+            expect:
+              plan: "pro"
+              status: "active"
+
+    - name: User with expired trial sees upgrade prompt
+      steps:
+        - modify_db:
+            collection: "subscriptions"
+            query: { email: "newuser@example.com" }
+            update:
+              trialExpired: true
+        - navigate: "/dashboard"
+        - expect:
+            contains: "Your trial has expired"
+            visible: "[data-testid='upgrade-button']"
+
+    - name: User who completed onboarding does not see modal again
+      steps:
+        - login_as: "newuser@example.com"
+        - navigate: "/dashboard"
+        - expect:
+            not_visible:
+              - "[data-testid='onboarding-modal']"
+
+    - name: Onboarding modal shows plan cards and pricing (UI smoke)
+      steps:
+        - login_as: "newuser@example.com"
+        - navigate: "/dashboard"
+        - expect:
+            visible:
+              - "[data-testid='plan-free']"
+              - "[data-testid='plan-starter']"
+              - "[data-testid='plan-core']"
+            contains:
+              - "Free"
+              - "$0"
+              - "Starter"
+              - "$19"
+              - "Core"
+              - "$49"
+            note: "Plans should use shadcn/ui Card + Button components within Dialog."

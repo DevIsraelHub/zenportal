@@ -1,0 +1,95 @@
+metadata:
+  author: "Ejeh Israel"
+  date: "2025-10-17"
+  feature: "Auth0 Authentication Integration"
+
+spec:
+  name: Auth0 Authentication Flow
+  description: Ensure users can securely sign up, log in, log out, and access protected routes using Auth0.
+  
+  scenarios:
+    - name: User visits login page and signs in via Auth0 (App Router)
+      steps:
+        - navigate: "/"
+        - click: "a[href='/auth/login']"
+        - expect:
+            url_contains: "auth0.com"
+            contains: "Log in"
+        - action: "complete Auth0 login with valid credentials"
+        - expect:
+            url: "/"
+            contains:
+              - "Welcome back"
+              - "Go to Dashboard"
+
+    - name: Unauthenticated user visits profile page (no user data shown)
+      steps:
+        - navigate: "/profile"
+        - expect:
+          contains_any:
+            - "Loading..."
+          not_contains:
+            - "@"  # email should not be shown
+
+    - name: Authenticated user accesses profile page
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/profile"
+        - expect:
+            contains:
+              - "user@example.com"
+              - "{"  # JSON block begins
+
+    - name: User logs out successfully
+      steps:
+        - navigate: "/auth/logout"
+        - expect:
+            redirected_to: "/"
+          contains: "Login"
+
+    - name: Middleware delegates to Auth0 SDK and is configured (App Router)
+      steps:
+        - verify_file: "middleware.ts"
+          ensure:
+            contains:
+              - "export async function middleware"
+              - "return await auth0.middleware(request)"
+              - "export const config = {"
+              - "matcher: ["
+
+    - name: Auth0 session and user profile fetched successfully (Server/Route)
+      steps:
+        - call: "auth0.getSession()"
+        - expect:
+            result:
+              user:
+                contains:
+                  - "email"
+                  - "name"
+                  - "picture"
+
+    - name: Auth0 SDK configuration validation
+      steps:
+        - verify_file: ".env.local"
+        - ensure:
+            contains:
+              - "AUTH0_DOMAIN"
+              - "AUTH0_CLIENT_ID"
+              - "AUTH0_CLIENT_SECRET"
+              - "AUTH0_SECRET"
+              - "APP_BASE_URL"
+        - open: "lib/auth0.ts"
+        - ensure:
+            contains:
+              - "import { Auth0Client } from \"@auth0/nextjs-auth0/server\""
+              - "new Auth0Client("
+        - open: "middleware.ts"
+        - ensure:
+            contains:
+              - "return await auth0.middleware(request)"
+        - open: "package.json"
+        - ensure:
+            contains:
+              - "\"@auth0/nextjs-auth0\": \"^4"
+              - "\"next\": \"15"
+        - note: "This project uses Next.js App Router; all routes under /auth/* are provided by the Auth0 SDK via middleware."
