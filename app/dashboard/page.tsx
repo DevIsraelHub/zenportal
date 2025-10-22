@@ -93,12 +93,22 @@ export default function DashboardPage() {
                   <Progress value={57} className="h-2" />
                 </div>
 
-                <Link href="/dashboard/billing">
-                  <Button className="w-full bg-primary hover:bg-primary/90">
-                    Upgrade to Pro
-                    <ArrowUpRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
+                <Button
+                  className="w-full bg-primary hover:bg-primary/90"
+                  onClick={async () => {
+                    const priceId = process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID
+                    const res = await fetch('/api/checkout', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ priceId, email: user.email, auth0Id: (user as any).sub }),
+                    })
+                    const data = await res.json()
+                    if (data.url) window.location.href = data.url
+                  }}
+                >
+                  Upgrade to Pro
+                  <ArrowUpRight className="ml-2 h-4 w-4" />
+                </Button>
               </>
             )}
 
@@ -108,11 +118,22 @@ export default function DashboardPage() {
                   <span className="text-muted-foreground">Next billing date</span>
                   <span className="font-medium">Jan 15, 2025</span>
                 </div>
-                <Link href="/dashboard/billing">
-                  <Button variant="outline" className="w-full bg-transparent">
-                    Manage Billing
-                  </Button>
-                </Link>
+                <Button
+                  variant="outline"
+                  className="w-full bg-transparent"
+                  onClick={async () => {
+                    // In a real app customerId comes from DB; for demo assume it's stored on the user object
+                    const res = await fetch('/api/billing/portal', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ customerId: (user as any).stripeCustomerId }),
+                    })
+                    const data = await res.json()
+                    if (data.url) window.location.href = data.url
+                  }}
+                >
+                  Manage Billing
+                </Button>
               </div>
             )}
           </CardContent>

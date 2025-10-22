@@ -1,0 +1,86 @@
+// ZenPortal Database Schema
+// Customer Portal with Auth0, Stripe, and MongoDB
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  auth0Id   String   @unique
+  email     String   @unique
+  name      String?
+  picture   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  subscription Subscription?
+  usage        Usage[]
+
+  @@map("users")
+}
+
+model Subscription {
+  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
+  userId               String             @unique @db.ObjectId
+  stripeCustomerId     String             @unique
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(INACTIVE)
+  plan                 SubscriptionPlan   @default(FREE)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model Usage {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  type        UsageType
+  amount      Int // Credits or requests used
+  description String?
+  metadata    Json? // Additional usage data
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("usage")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  ENTERPRISE
+  STARTER
+  CORE
+  ADVANCED
+  MAX
+}
+
+enum UsageType {
+  AI_REQUEST
+  API_CALL
+  INTEGRATION_SYNC
+  EXPORT_REPORT
+}

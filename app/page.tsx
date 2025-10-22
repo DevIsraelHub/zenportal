@@ -4,17 +4,29 @@ import { useUser } from "@auth0/nextjs-auth0"
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { motion } from 'framer-motion'
-import { ArrowRight, Shield, Zap, Users, BarChart3 } from 'lucide-react'
+import { ArrowRight, Shield, Zap, Users, BarChart3, Check } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import Logo from "@/components/Logo"
 export default function HomePage() {
   const { user, isLoading, error } = useUser()
+  const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean | null>(null)
 
   useEffect(() => {
     console.log("isLoading", isLoading)
     console.log("error", error)
     console.log("user", user)
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    fetch('/api/user')
+      .then(res => res.ok ? res.json() : Promise.reject(res))
+      .then(json => {
+        const status = json?.user?.subscription?.status
+        setHasActiveSubscription(status === 'ACTIVE' || status === 'TRIALING')
+      })
+      .catch(() => setHasActiveSubscription(false))
   }, [user])
 
   if (isLoading) {
@@ -25,7 +37,7 @@ export default function HomePage() {
     )
   }
 
-  if (user) {
+  if (user && hasActiveSubscription === true) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <motion.div
@@ -35,17 +47,230 @@ export default function HomePage() {
           className="text-center"
         >
           <h1 className="text-4xl font-bold mb-4">Welcome back, {user.name}!</h1>
-          <p className="text-muted-foreground mb-8">Ready to manage your subscription?</p>
+          <p className="text-muted-foreground mb-8">Your subscription is active.</p>
           <Link href="/dashboard">
             <Button size="lg" className="gap-2 mr-2">
-              Go to Dashboard
+              Continue to Dashboard
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
-          <a href="/auth/logout">
-            <Button variant="outline">LogOut</Button>
-          </a>
         </motion.div>
+      </div>
+    )
+  }
+
+  if (user && hasActiveSubscription === false) {
+    const plans = [
+      {
+        name: "Free",
+        description: "Build, test, and experiment— no commitment required.",
+        price: "$0",
+        period: "/month",
+        features: [
+          "30 Premium LLM Calls/day",
+          "7-Day Starter Plan Trial",
+          "Unlimited BYOK Calls"
+        ],
+        buttonText: "GET FREE",
+        buttonVariant: "outline" as const,
+        highlighted: false
+      },
+      {
+        name: "Starter",
+        description: "Great for light personal use, prototypes, and side projects.",
+        price: "$19",
+        period: "/user/month",
+        features: [
+          "280 Premium LLM Calls/day",
+          "Auto & Auto+ AI Models",
+          "Unlimited BYOK Calls"
+        ],
+        buttonText: "GET STARTER",
+        buttonVariant: "default" as const,
+        highlighted: true,
+        badge: "7-Day Free"
+      },
+      {
+        name: "Core",
+        description: "Professional developers and medium-sized teams.",
+        price: "$49",
+        period: "/user/month",
+        features: [
+          "750 Premium LLM Calls/day",
+          "Auto & Auto+ AI Models",
+          "Unlimited BYOK Calls",
+          "Multi-Repository Indexing",
+          "Analytics Dashboard",
+          "SSO & Audit Logs"
+        ],
+        buttonText: "GET CORE",
+        buttonVariant: "outline" as const,
+        highlighted: false
+      },
+      {
+        name: "Main",
+        description: "Professional developers and medium-sized teams.",
+        price: "$49",
+        period: "/user/month",
+        features: [
+          "750 Premium LLM Calls/day",
+          "Auto & Auto+ AI Models",
+          "Unlimited BYOK Calls",
+          "Multi-Repository Indexing",
+          "Analytics Dashboard",
+          "SSO & Audit Logs"
+        ],
+        buttonText: "GET CORE",
+        buttonVariant: "outline" as const,
+        highlighted: false
+      }
+    ]
+
+    return (
+      <div className="min-h-screen bg-black text-white">
+        {/* Header */}
+        <header className="container mx-auto px-4 py-6">
+          <nav className="flex items-center justify-between">
+            <Logo />
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-400">Welcome, {user.name}</span>
+              <a href="/auth/logout">
+                <Button variant="outline" className="border-gray-600 text-white hover:bg-gray-800">
+                  Logout
+                </Button>
+              </a>
+            </div>
+          </nav>
+        </header>
+
+        {/* Main Content */}
+        <div className="container mx-auto px-4 py-12">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-16"
+          >
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <h1 className="text-5xl font-bold">Pricing</h1>
+              <span className="bg-gray-800 text-white px-3 py-1 rounded-full text-sm font-medium">
+                New higher limits
+              </span>
+            </div>
+            <p className="text-xl text-gray-400 mb-2">More power, when you need it</p>
+            <h2 className="text-3xl font-bold mt-8">Essential Plans</h2>
+          </motion.div>
+
+          {/* Pricing Cards */}
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {plans.map((plan, index) => (
+              <motion.div
+                key={plan.name}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 * index }}
+                className="relative"
+              >
+                <Card className={`h-full ${plan.highlighted
+                  ? 'bg-gradient-to-b from-red-900/20 to-gray-900 border-red-500/30'
+                  : 'bg-gray-900 border-gray-700'
+                  }`}>
+                  {plan.badge && (
+                    <div className="absolute -top-3 right-6">
+                      <span className="bg-gray-800 text-white px-3 py-1 rounded-full text-sm font-medium">
+                        {plan.badge}
+                      </span>
+                    </div>
+                  )}
+
+                  <CardHeader className="text-center pb-6">
+                    <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
+                    <CardDescription className="text-gray-400 text-base">
+                      {plan.description}
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="text-center">
+                    <div className="mb-6">
+                      <span className="text-4xl font-bold">{plan.price}</span>
+                      <span className="text-gray-400 text-lg">{plan.period}</span>
+                    </div>
+
+                    <ul className="space-y-3 mb-8 text-left">
+                      {plan.features.map((feature, featureIndex) => (
+                        <li key={featureIndex} className="flex items-center gap-3">
+                          <Check className="h-5 w-5 text-green-500 flex-shrink-0" />
+                          <span className="text-gray-300">
+                            {feature.includes('Auto & Auto+ AI Models') ? (
+                              <>
+                                <span className="underline">Auto & Auto+ AI Models</span>
+                              </>
+                            ) : feature.includes('Multi-Repository Indexing') ? (
+                              <>
+                                <span className="underline">Multi-Repository Indexing</span>
+                              </>
+                            ) : feature.includes('Analytics Dashboard') ? (
+                              <>
+                                <span className="underline">Analytics Dashboard</span>
+                              </>
+                            ) : feature.includes('SSO & Audit Logs') ? (
+                              <>
+                                <span className="underline">SSO & Audit Logs</span>
+                              </>
+                            ) : (
+                              feature
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Button
+                      variant={plan.buttonVariant}
+                      size="lg"
+                      className={`w-full ${plan.buttonVariant === 'default'
+                        ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                        : 'border-gray-600 text-white hover:bg-gray-800'
+                        }`}
+                      onClick={async () => {
+                        const priceMap: Record<string, string> = {
+                          Starter: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID || "",
+                          Core: process.env.NEXT_PUBLIC_STRIPE_CORE_PRICE_ID || "",
+                        }
+                        const priceId = priceMap[plan.name as keyof typeof priceMap]
+                        if (!priceId) return
+                        const res = await fetch('/api/checkout', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ priceId, email: user.email, auth0Id: (user as any).sub }),
+                        })
+                        const data = await res.json()
+                        if (data.url) window.location.href = data.url
+                      }}
+                    >
+                      {plan.buttonText}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Additional CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="text-center mt-16"
+          >
+            <p className="text-gray-400 mb-6">
+              Need help choosing the right plan?
+              <Link href="/dashboard" className="text-white hover:underline ml-1">
+                Contact our team
+              </Link>
+            </p>
+          </motion.div>
+        </div>
       </div>
     )
   }
