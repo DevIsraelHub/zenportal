@@ -34,7 +34,24 @@ function mapStripeStatusToPrisma(status: string): "ACTIVE" | "INACTIVE" | "CANCE
   }
 }
 
+// Handle all HTTP methods for webhook
 export async function POST(req: NextRequest) {
+  return handleWebhook(req)
+}
+
+export async function GET(req: NextRequest) {
+  return handleWebhook(req)
+}
+
+export async function PUT(req: NextRequest) {
+  return handleWebhook(req)
+}
+
+export async function DELETE(req: NextRequest) {
+  return handleWebhook(req)
+}
+
+async function handleWebhook(req: NextRequest) {
   const signature = req.headers.get("stripe-signature")
   if (!signature || !process.env.STRIPE_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 })
@@ -281,6 +298,17 @@ export async function POST(req: NextRequest) {
             })
           }
         }
+        break
+      }
+
+      case "billing_portal.session.created": {
+        const billingPortalSession = event.data.object as Stripe.BillingPortal.Session
+        console.log("Billing portal session created:", {
+          sessionId: billingPortalSession.id,
+          customerId: billingPortalSession.customer,
+          returnUrl: billingPortalSession.return_url
+        })
+        // No action needed for billing portal sessions - they're just for redirecting users
         break
       }
 
