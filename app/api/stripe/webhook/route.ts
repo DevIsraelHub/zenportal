@@ -179,10 +179,12 @@ async function handleWebhook(req: NextRequest) {
           break
         }
 
-        // If this is a new subscription and user already has an active subscription,
-        // cancel the old one to prevent multiple active subscriptions
-        if (subscription.status === 'active' && user.subscription?.status === 'ACTIVE') {
-          console.log("User already has active subscription, canceling old one")
+        // Only cancel old subscription if this is a different subscription ID
+        // This prevents cancelling the same subscription when it's updated
+        if (subscription.status === 'active' &&
+          user.subscription?.status === 'ACTIVE' &&
+          user.subscription.stripeSubscriptionId !== subscription.id) {
+          console.log("User has different active subscription, canceling old one:", user.subscription.stripeSubscriptionId)
           try {
             if (user.subscription.stripeSubscriptionId) {
               await stripe.subscriptions.cancel(user.subscription.stripeSubscriptionId)
