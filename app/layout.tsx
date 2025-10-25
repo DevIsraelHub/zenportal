@@ -3,6 +3,7 @@ import "./globals.css";
 import { Suspense } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
+import { Analytics } from "@vercel/analytics/next"
 
 export const metadata: Metadata = {
   title: "Zencoder Portal - Customer Management & Billing",
@@ -30,6 +31,7 @@ export default function RootLayout({
           <Suspense fallback={null}>{children}</Suspense>
           <Toaster />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )

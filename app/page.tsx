@@ -451,7 +451,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <Logo />
             <p className="text-sm text-muted-foreground">
-              © 2024 ZenPortal. Built with Next.js, Stripe, and Auth0 By <Link href="https://www.ejehisrael.com">Ejeh</Link>.
+              © 2024 ZenPortal. Built with Next.js, Stripe, and Auth0 By <Link target="_blank" href="https://www.ejehisrael.com">Ejeh</Link>.
             </p>
           </div>
         </div>
