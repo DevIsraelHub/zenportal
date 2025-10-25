@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { useEffect, useState } from "react"
 import Logo from "@/components/Logo"
 import { toast } from 'sonner'
+import { ThemeToggle } from '@/components/theme-toggle'
 export default function HomePage() {
   const { user, isLoading, error } = useUser()
   const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean | null>(null)
@@ -325,9 +326,12 @@ export default function HomePage() {
       <header className="container mx-auto px-4 py-6">
         <nav className="flex items-center justify-between">
           <Logo />
-          <a href="/auth/login">
-            <Button variant="outline">Login</Button>
-          </a>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            <a href="/auth/login">
+              <Button variant="outline">Login</Button>
+            </a>
+          </div>
         </nav>
       </header>
 
@@ -418,6 +422,162 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Pricing Section */}
+      <section className="container mx-auto px-4 py-20">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-3xl font-bold mb-4">Simple, Transparent Pricing</h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Choose the plan that fits your needs. All plans include our core features
+            with no hidden fees or surprises.
+          </p>
+        </motion.div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+          {[
+            {
+              name: "Starter",
+              price: "$19",
+              period: "/user/month",
+              description: "Perfect for individuals and small teams",
+              features: [
+                "280 Premium LLM Calls/day",
+                "Auto & Auto+ AI Models",
+                "Unlimited BYOK Calls",
+                "Basic Support"
+              ],
+              highlighted: true,
+              badge: "Most Popular"
+            },
+            {
+              name: "Core",
+              price: "$49",
+              period: "/user/month",
+              description: "Great for growing teams and businesses",
+              features: [
+                "750 Premium LLM Calls/day",
+                "Auto & Auto+ AI Models",
+                "Unlimited BYOK Calls",
+                "Multi-Repository Indexing",
+                "Analytics Dashboard",
+                "Priority Support"
+              ],
+              highlighted: false
+            },
+            {
+              name: "Advanced",
+              price: "$119",
+              period: "/user/month",
+              description: "For teams that need advanced features",
+              features: [
+                "1500 Premium LLM Calls/day",
+                "Access to Claude Opus 4.1",
+                "Unlimited Calls in Slow Mode",
+                "Unlimited BYOK Calls",
+                "Multi-Repository Indexing",
+                "Analytics Dashboard",
+                "SSO & Audit Logs",
+                "24/7 Support"
+              ],
+              highlighted: false
+            },
+            {
+              name: "Max",
+              price: "$250",
+              period: "/user/month",
+              description: "For high-performance teams with maximum usage",
+              features: [
+                "3200 Premium LLM Calls/day",
+                "Access to Claude Opus 4.1",
+                "Unlimited Calls in Slow Mode",
+                "Unlimited BYOK Calls",
+                "Multi-Repository Indexing",
+                "Analytics Dashboard",
+                "SSO & Audit Logs",
+                "24/7 Support",
+                "Dedicated Account Manager"
+              ],
+              highlighted: false
+            }
+          ].map((plan, index) => (
+            <motion.div
+              key={plan.name}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 * index }}
+              className="relative"
+            >
+              <Card className={`h-full cursor-pointer transition-all duration-300 hover:shadow-lg ${plan.highlighted
+                ? 'bg-gradient-to-b from-primary/10 to-muted border-primary/30 scale-105'
+                : 'hover:border-primary/20'
+                }`}>
+                {plan.badge && (
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                    <span className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-sm font-medium">
+                      {plan.badge}
+                    </span>
+                  </div>
+                )}
+
+                <CardHeader className="text-center pb-6">
+                  <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
+                  <CardDescription className="text-muted-foreground">
+                    {plan.description}
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="text-center">
+                  <div className="mb-6">
+                    <span className="text-4xl font-bold">{plan.price}</span>
+                    <span className="text-muted-foreground text-lg">{plan.period}</span>
+                  </div>
+
+                  <ul className="space-y-3 mb-8 text-left">
+                    {plan.features.map((feature, featureIndex) => (
+                      <li key={featureIndex} className="flex items-center gap-3">
+                        <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                        <span className="text-sm text-foreground">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Button
+                    variant={plan.highlighted ? "default" : "outline"}
+                    size="lg"
+                    className="w-full"
+                    onClick={() => {
+                      window.location.href = "/auth/login?screen_hint=signup"
+                    }}
+                  >
+                    Get Started
+                  </Button>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.5 }}
+          className="text-center mt-12"
+        >
+          <p className="text-muted-foreground mb-4">
+            Need a custom plan? We also offer enterprise solutions.
+          </p>
+          <Button variant="outline" onClick={() => {
+            window.location.href = "/auth/login?screen_hint=signup"
+          }}>
+            Contact Sales
+          </Button>
+        </motion.div>
+      </section>
+
       {/* CTA Section */}
       <section className="container mx-auto px-4 py-20">
         <motion.div
@@ -451,7 +611,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <Logo />
             <p className="text-sm text-muted-foreground">
-              © 2024 ZenPortal. Built with Next.js, Stripe, and Auth0 By <Link target="_blank" href="https://www.ejehisrael.com">Ejeh</Link>.
+              © 2024 ZenPortal. Built with Next.js, Stripe, and Auth0 By <Link target="_blank" className="text-primary" href="https://www.ejehisrael.com">Ejeh</Link>
             </p>
           </div>
         </div>
