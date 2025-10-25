@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { ArrowUpRight, Zap, CreditCard, TrendingUp, Activity } from "lucide-react"
 import Link from "next/link"
 import { useUser } from "@auth0/nextjs-auth0"
+import { toast } from 'sonner'
 
 export default function DashboardPage() {
   const { user } = useUser()
@@ -122,14 +123,27 @@ export default function DashboardPage() {
                   variant="outline"
                   className="w-full bg-transparent"
                   onClick={async () => {
-                    // In a real app customerId comes from DB; for demo assume it's stored on the user object
-                    const res = await fetch('/api/billing/portal', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ customerId: (user as any).stripeCustomerId }),
-                    })
-                    const data = await res.json()
-                    if (data.url) window.location.href = data.url
+                    try {
+                      const res = await fetch('/api/billing/portal', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                      })
+
+                      const data = await res.json()
+
+                      if (res.ok && data.url) {
+                        window.location.href = data.url
+                      } else {
+                        toast.error("Billing Portal Error", {
+                          description: data.error || "Failed to open billing portal. Please try again."
+                        })
+                      }
+                    } catch (error) {
+                      console.error('Error opening billing portal:', error)
+                      toast.error("Billing Portal Error", {
+                        description: "An unexpected error occurred. Please try again."
+                      })
+                    }
                   }}
                 >
                   Manage Billing
@@ -174,7 +188,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-            <Link href="/dashboard/integrations">
+            <Link href="/dashboard/billing">
               <Button variant="outline" className="w-full justify-start bg-transparent">
                 <Zap className="mr-2 h-4 w-4" />
                 Connect Integration

@@ -1,0 +1,235 @@
+metadata:
+  author: "Ejeh Israel"
+  date: "2025-01-17"
+  feature: "ZenPortal Usage Analytics & Tracking"
+  version: "1.0.0"
+
+spec:
+  name: Usage Analytics & Tracking System
+  description: |
+    Comprehensive usage tracking, analytics dashboard, and subscription limit enforcement.
+    Tracks AI requests, API calls, integrations, and exports with real-time monitoring.
+
+  scenarios:
+    - name: Usage data collection and storage
+      steps:
+        - api_call: "POST /api/usage/track"
+        - body:
+            type: "AI_REQUEST"
+            amount: 15
+            description: "Code completion request"
+            metadata: { model: "gpt-4", tokens: 150 }
+        - expect:
+            status: 201
+            response:
+              id: "usage_*"
+              userId: "user_id"
+              type: "AI_REQUEST"
+              amount: 15
+        - verify_db:
+            collection: "usage"
+            query: { userId: "user_id", type: "AI_REQUEST" }
+            expect:
+              amount: 15
+              description: "Code completion request"
+
+    - name: Usage analytics dashboard display
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard/usage"
+        - expect:
+            visible:
+              - "[data-testid='total-requests-card']"
+              - "[data-testid='credits-used-card']"
+              - "[data-testid='avg-per-day-card']"
+              - "[data-testid='peak-usage-card']"
+            contains:
+              - "Usage Analytics"
+              - "Total Requests"
+              - "Credits Used"
+
+    - name: Usage progress tracking against plan limits
+      steps:
+        - login_as: "starter_user@example.com"
+        - navigate: "/dashboard/usage"
+        - expect:
+            visible: "[data-testid='usage-progress-bar']"
+            contains: "200 / 200"
+        - api_call: "POST /api/usage/track"
+        - body: { type: "AI_REQUEST", amount: 50 }
+        - navigate: "/dashboard/usage"
+        - expect:
+            contains: "250 / 200"
+            visible: "[data-testid='limit-exceeded-warning']"
+
+    - name: Usage by type breakdown
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard/usage"
+        - expect:
+            visible: "[data-testid='usage-by-type-chart']"
+            contains:
+              - "AI Request"
+              - "API Call"
+              - "Integration Sync"
+              - "Export Report"
+
+    - name: Daily usage trend visualization
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard/usage"
+        - expect:
+            visible: "[data-testid='daily-usage-chart']"
+            contains: "Daily Usage Trend"
+        - expect:
+            chart_data:
+              - "30 days of usage data"
+              - "Interactive hover tooltips"
+              - "Responsive bar chart"
+
+    - name: Recent activity timeline
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard/usage"
+        - expect:
+            visible: "[data-testid='recent-activity-timeline']"
+            contains:
+              - "Recent Activity"
+              - "Usage events with timestamps"
+              - "Activity type icons"
+
+    - name: Usage limit warnings
+      steps:
+        - login_as: "user_near_limit@example.com"
+        - navigate: "/dashboard/usage"
+        - expect:
+            visible: "[data-testid='usage-warning-banner']"
+            contains: "You're approaching your usage limit"
+        - expect:
+            warning_color: "yellow"
+            action_button: "Upgrade Plan"
+
+    - name: Usage data export functionality
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard/usage"
+        - click: "[data-testid='export-usage-button']"
+        - expect:
+            file_download: "usage-report.csv"
+            contains:
+              - "Date,Type,Amount,Description"
+              - "Usage data for last 30 days"
+
+    - name: Usage refresh and real-time updates
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard/usage"
+        - click: "[data-testid='refresh-usage-button']"
+        - expect:
+            loading_state: "Refreshing..."
+        - expect:
+            updated_data: "Latest usage statistics"
+
+    - name: Usage statistics calculation
+      steps:
+        - api_call: "GET /api/usage/stats"
+        - query_params: { period: "30d" }
+        - expect:
+            response:
+              totalRequests: 1250
+              totalCredits: 1250
+              averagePerDay: 41.7
+              peakUsage: 150
+              usageByType:
+                AI_REQUEST: 800
+                API_CALL: 300
+                INTEGRATION_SYNC: 100
+                EXPORT_REPORT: 50
+
+    - name: Usage limits enforcement by plan
+      steps:
+        - login_as: "free_user@example.com"
+        - api_call: "GET /api/usage/limits"
+        - expect:
+            response:
+              dailyLLMCalls: 25
+              repositories: 1
+              teamMembers: 1
+        - login_as: "max_user@example.com"
+        - api_call: "GET /api/usage/limits"
+        - expect:
+            response:
+              dailyLLMCalls: 3200
+              repositories: -1
+              teamMembers: -1
+
+    - name: Usage tracking for different activity types
+      steps:
+        - api_call: "POST /api/usage/track"
+        - body: { type: "API_CALL", amount: 1, description: "REST API request" }
+        - api_call: "POST /api/usage/track"
+        - body: { type: "INTEGRATION_SYNC", amount: 5, description: "GitHub sync" }
+        - api_call: "POST /api/usage/track"
+        - body: { type: "EXPORT_REPORT", amount: 10, description: "PDF export" }
+        - navigate: "/dashboard/usage"
+        - expect:
+            usage_by_type:
+              API_CALL: 1
+              INTEGRATION_SYNC: 5
+              EXPORT_REPORT: 10
+
+    - name: Usage analytics with subscription context
+      steps:
+        - login_as: "core_user@example.com"
+        - navigate: "/dashboard/usage"
+        - expect:
+            contains: "Core Plan"
+            visible: "[data-testid='plan-limits-display']"
+        - expect:
+            limits_display:
+              - "550 Premium LLM Calls/day"
+              - "10 Repositories"
+              - "5 Team Members"
+
+    - name: Usage data persistence and retrieval
+      steps:
+        - api_call: "POST /api/usage/track"
+        - body: { type: "AI_REQUEST", amount: 25 }
+        - api_call: "GET /api/user"
+        - expect:
+            response:
+              user:
+                usage:
+                  - type: "AI_REQUEST"
+                    amount: 25
+                    createdAt: "2025-01-17T*"
+
+    - name: Usage analytics responsive design
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard/usage"
+        - viewport: "mobile"
+        - expect:
+            layout: "Single column"
+            cards: "Stacked vertically"
+            charts: "Responsive scaling"
+        - viewport: "desktop"
+        - expect:
+            layout: "Multi-column grid"
+            cards: "Side by side"
+            charts: "Full width"
+
+    - name: Usage analytics error handling
+      steps:
+        - api_call: "POST /api/usage/track"
+        - body: { type: "INVALID_TYPE", amount: 10 }
+        - expect:
+            status: 400
+            response:
+              error: "Invalid usage type"
+        - api_call: "GET /api/usage/stats"
+        - headers: { Authorization: "invalid_token" }
+        - expect:
+            status: 401
+            response:
+              error: "Unauthorized"

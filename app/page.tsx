@@ -8,6 +8,7 @@ import { ArrowRight, Shield, Zap, Users, BarChart3, Check } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from "react"
 import Logo from "@/components/Logo"
+import { toast } from 'sonner'
 export default function HomePage() {
   const { user, isLoading, error } = useUser()
   const [hasActiveSubscription, setHasActiveSubscription] = useState<boolean | null>(null)
@@ -108,34 +109,53 @@ export default function HomePage() {
         highlighted: false
       },
       {
-        name: "Main",
-        description: "Professional developers and medium-sized teams.",
-        price: "$49",
+        name: "Advanced",
+        description: "Premium models, enterprise controls, and throughput for automation-heavy workflows.",
+        price: "$119",
         period: "/user/month",
         features: [
-          "750 Premium LLM Calls/day",
-          "Auto & Auto+ AI Models",
+          "1500 Premium LLM Calls/day",
+          "Access to Claude Opus 4.1",
+          "Unlimited Calls in Slow Mode",
           "Unlimited BYOK Calls",
           "Multi-Repository Indexing",
           "Analytics Dashboard",
           "SSO & Audit Logs"
         ],
-        buttonText: "GET CORE",
+        buttonText: "CHOOSE ADVANCED",
+        buttonVariant: "outline" as const,
+        highlighted: false
+      },
+      {
+        name: "Max",
+        description: "Built for high-performing developers and teams with maximum usage limits.",
+        price: "$250",
+        period: "/user/month",
+        features: [
+          "3200 Premium LLM Calls/day",
+          "Access to Claude Opus 4.1",
+          "Unlimited Calls in Slow Mode",
+          "Unlimited BYOK Calls",
+          "Multi-Repository Indexing",
+          "Analytics Dashboard",
+          "SSO & Audit Logs"
+        ],
+        buttonText: "CHOOSE MAX",
         buttonVariant: "outline" as const,
         highlighted: false
       }
     ]
 
     return (
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen bg-background text-foreground">
         {/* Header */}
         <header className="container mx-auto px-4 py-6">
           <nav className="flex items-center justify-between">
             <Logo />
             <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-400">Welcome, {user.name}</span>
+              <span className="text-sm text-muted-foreground">Welcome, {user.name}</span>
               <a href="/auth/logout">
-                <Button variant="outline" className="border-gray-600 text-white hover:bg-gray-800">
+                <Button variant="outline">
                   Logout
                 </Button>
               </a>
@@ -157,7 +177,7 @@ export default function HomePage() {
                 New higher limits
               </span>
             </div>
-            <p className="text-xl text-gray-400 mb-2">More power, when you need it</p>
+            <p className="text-xl text-muted-foreground mb-2">More power, when you need it</p>
             <h2 className="text-3xl font-bold mt-8">Essential Plans</h2>
           </motion.div>
 
@@ -172,8 +192,8 @@ export default function HomePage() {
                 className="relative"
               >
                 <Card className={`h-full ${plan.highlighted
-                  ? 'bg-gradient-to-b from-red-900/20 to-gray-900 border-red-500/30'
-                  : 'bg-gray-900 border-gray-700'
+                  ? 'bg-gradient-to-b from-primary/10 to-muted border-primary/30'
+                  : ''
                   }`}>
                   {plan.badge && (
                     <div className="absolute -top-3 right-6">
@@ -185,7 +205,7 @@ export default function HomePage() {
 
                   <CardHeader className="text-center pb-6">
                     <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
-                    <CardDescription className="text-gray-400 text-base">
+                    <CardDescription className="text-muted-foreground text-base">
                       {plan.description}
                     </CardDescription>
                   </CardHeader>
@@ -193,14 +213,14 @@ export default function HomePage() {
                   <CardContent className="text-center">
                     <div className="mb-6">
                       <span className="text-4xl font-bold">{plan.price}</span>
-                      <span className="text-gray-400 text-lg">{plan.period}</span>
+                      <span className="text-muted-foreground text-lg">{plan.period}</span>
                     </div>
 
                     <ul className="space-y-3 mb-8 text-left">
                       {plan.features.map((feature, featureIndex) => (
                         <li key={featureIndex} className="flex items-center gap-3">
                           <Check className="h-5 w-5 text-green-500 flex-shrink-0" />
-                          <span className="text-gray-300">
+                          <span className="text-foreground">
                             {feature.includes('Auto & Auto+ AI Models') ? (
                               <>
                                 <span className="underline">Auto & Auto+ AI Models</span>
@@ -229,23 +249,47 @@ export default function HomePage() {
                       variant={plan.buttonVariant}
                       size="lg"
                       className={`w-full ${plan.buttonVariant === 'default'
-                        ? 'bg-orange-500 hover:bg-orange-600 text-white'
-                        : 'border-gray-600 text-white hover:bg-gray-800'
+                        ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                        : ''
                         }`}
                       onClick={async () => {
+                        // Free plan redirects to dashboard
+                        if (plan.name === "Free") {
+                          window.location.href = "/dashboard"
+                          return
+                        }
+
                         const priceMap: Record<string, string> = {
                           Starter: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID || "",
                           Core: process.env.NEXT_PUBLIC_STRIPE_CORE_PRICE_ID || "",
+                          Advanced: process.env.NEXT_PUBLIC_STRIPE_ADVANCED_PRICE_ID || "",
+                          Max: process.env.NEXT_PUBLIC_STRIPE_MAX_PRICE_ID || "",
                         }
                         const priceId = priceMap[plan.name as keyof typeof priceMap]
                         if (!priceId) return
-                        const res = await fetch('/api/checkout', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ priceId, email: user.email, auth0Id: (user as any).sub }),
-                        })
-                        const data = await res.json()
-                        if (data.url) window.location.href = data.url
+
+                        try {
+                          const res = await fetch('/api/checkout', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ priceId, email: user.email, auth0Id: (user as any).sub }),
+                          })
+
+                          const data = await res.json()
+
+                          if (res.ok && data.url) {
+                            window.location.href = data.url
+                          } else {
+                            toast.error("Subscription Error", {
+                              description: data.error || "Failed to start checkout. Please try again."
+                            })
+                          }
+                        } catch (error) {
+                          console.error('Error starting checkout:', error)
+                          toast.error("Checkout Error", {
+                            description: "An unexpected error occurred. Please try again."
+                          })
+                        }
                       }}
                     >
                       {plan.buttonText}
@@ -263,9 +307,9 @@ export default function HomePage() {
             transition={{ duration: 0.5, delay: 0.4 }}
             className="text-center mt-16"
           >
-            <p className="text-gray-400 mb-6">
+            <p className="text-muted-foreground mb-6">
               Need help choosing the right plan?
-              <Link href="/dashboard" className="text-white hover:underline ml-1">
+              <Link href="/dashboard" className="text-foreground hover:underline ml-1">
                 Contact our team
               </Link>
             </p>
@@ -405,12 +449,7 @@ export default function HomePage() {
       <footer className="border-t bg-muted/30">
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 bg-primary rounded flex items-center justify-center">
-                <Zap className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <span className="font-semibold">ZenPortal</span>
-            </div>
+            <Logo />
             <p className="text-sm text-muted-foreground">
               © 2024 ZenPortal. Built with Next.js, Stripe, and Auth0.
             </p>

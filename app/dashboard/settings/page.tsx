@@ -21,10 +21,11 @@ import {
 } from 'lucide-react'
 import { useUser } from '@auth0/nextjs-auth0'
 import { useState } from 'react'
+import { useTheme } from '@/components/theme-provider'
 
 export default function SettingsPage() {
   const { user } = useUser()
-  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('dark')
+  const { theme, setTheme } = useTheme()
   const [settings, setSettings] = useState({
     notifications: {
       email: true,
@@ -79,13 +80,17 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-4">
-              {user?.picture && (
+              {user?.picture ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={user.picture}
                   alt={user.name || 'User'}
                   className="w-16 h-16 rounded-full"
                 />
+              ) : (
+                <div className="bg-primary/10 text-primary w-16 h-16 rounded-full flex items-center justify-center text-lg font-medium">
+                  {user?.name?.charAt(0).toUpperCase()}
+                </div>
               )}
               <div>
                 <p className="font-medium">{user?.name}</p>

@@ -3,5 +3,3 @@ export const useUser = jest.fn(() => ({
   error: null,
   isLoading: false,
 }));
-
-

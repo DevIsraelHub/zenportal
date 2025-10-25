@@ -1,0 +1,436 @@
+metadata:
+  author: "Ejeh Israel"
+  date: "2025-01-17"
+  feature: "ZenPortal Customer Portal - Complete Feature Suite"
+  version: "1.0.0"
+
+spec:
+  name: ZenPortal Customer Portal - Complete Feature Suite
+  description: |
+    A comprehensive customer portal built with Next.js 15, Auth0 authentication, 
+    Stripe billing, MongoDB/Prisma database, and shadcn/ui components. 
+    Features multi-tier subscription plans, usage analytics, billing management, 
+    and modern UI/UX with dark mode support.
+
+  architecture:
+    frontend:
+      framework: "Next.js 15 (App Router)"
+      ui_library: "shadcn/ui + Radix UI primitives"
+      styling: "Tailwind CSS v4"
+      animations: "Framer Motion"
+      state_management: "React hooks + Auth0 SDK"
+      icons: "Lucide React"
+    
+    backend:
+      api_routes: "Next.js App Router API routes"
+      database: "MongoDB with Prisma ORM"
+      authentication: "Auth0 Next.js SDK v4"
+      payments: "Stripe API v2025-09-30.clover"
+      webhooks: "Stripe webhook handling"
+    
+    deployment:
+      platform: "Vercel (recommended)"
+      environment_variables: "Required for Auth0, Stripe, MongoDB"
+      database_url: "MongoDB Atlas or local MongoDB"
+
+  features:
+    authentication:
+      - name: "Auth0 Integration"
+        description: "Secure OAuth2 authentication with Google/GitHub providers"
+        components:
+          - "lib/auth0.ts - Auth0 client configuration"
+          - "middleware.ts - Route protection middleware"
+          - "app/layout.tsx - UserProvider wrapper"
+        endpoints:
+          - "/api/auth/login - Auth0 login redirect"
+          - "/api/auth/logout - Auth0 logout redirect"
+          - "/api/auth/callback - Auth0 callback handler"
+        user_data:
+          - "email (unique identifier)"
+          - "name (display name)"
+          - "picture (profile avatar)"
+          - "auth0Id (unique Auth0 identifier)"
+
+    subscription_management:
+      - name: "Multi-Tier Subscription Plans"
+        description: "Five subscription tiers with different features and limits"
+        plans:
+          - name: "Free"
+            price: "$0/month"
+            features: ["30 Premium LLM Calls/day", "7-Day Starter Plan Trial", "Unlimited BYOK Calls"]
+            limits: { dailyLLMCalls: 25, repositories: 1, teamMembers: 1 }
+          
+          - name: "Starter"
+            price: "$19/user/month"
+            features: ["280 Premium LLM Calls/day", "Auto & Auto+ AI Models", "Unlimited BYOK Calls"]
+            limits: { dailyLLMCalls: 200, repositories: 3, teamMembers: 1 }
+            stripe_price_id: "NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID"
+          
+          - name: "Core"
+            price: "$49/user/month"
+            features: ["750 Premium LLM Calls/day", "Multi-Repository Indexing", "Analytics Dashboard", "SSO & Audit Logs"]
+            limits: { dailyLLMCalls: 550, repositories: 10, teamMembers: 5 }
+            stripe_price_id: "NEXT_PUBLIC_STRIPE_CORE_PRICE_ID"
+          
+          - name: "Advanced"
+            price: "$119/user/month"
+            features: ["1500 Premium LLM Calls/day", "Access to Claude Opus 4.1", "Unlimited Calls in Slow Mode"]
+            limits: { dailyLLMCalls: 1500, repositories: 25, teamMembers: 15 }
+            stripe_price_id: "NEXT_PUBLIC_STRIPE_ADVANCED_PRICE_ID"
+          
+          - name: "Max"
+            price: "$250/user/month"
+            features: ["3200 Premium LLM Calls/day", "Access to Claude Opus 4.1", "Unlimited everything"]
+            limits: { dailyLLMCalls: 3200, repositories: -1, teamMembers: -1 }
+            stripe_price_id: "NEXT_PUBLIC_STRIPE_MAX_PRICE_ID"
+
+    billing_system:
+      - name: "Stripe Integration"
+        description: "Complete billing system with checkout, subscriptions, and webhooks"
+        components:
+          - "lib/stripe.ts - Stripe client configuration"
+          - "app/api/checkout/route.ts - Checkout session creation"
+          - "app/api/billing/portal/route.ts - Billing portal access"
+          - "app/api/stripe/webhook/route.ts - Webhook event handling"
+        webhook_events:
+          - "checkout.session.completed - New subscription created"
+          - "customer.subscription.created - Subscription activated"
+          - "customer.subscription.updated - Plan changes"
+          - "customer.subscription.deleted - Subscription canceled"
+          - "invoice.payment_succeeded - Payment successful"
+          - "invoice.payment_failed - Payment failed"
+        features:
+          - "Secure checkout sessions with metadata"
+          - "Automatic subscription status updates"
+          - "Billing portal for self-service management"
+          - "Promotion code support"
+          - "Email conflict resolution"
+
+    database_schema:
+      - name: "Prisma Schema"
+        description: "MongoDB database schema with User, Subscription, and Usage models"
+        models:
+          - name: "User"
+            fields:
+              - "id (ObjectId, primary key)"
+              - "auth0Id (String, unique)"
+              - "email (String, unique)"
+              - "name (String, optional)"
+              - "picture (String, optional)"
+              - "createdAt (DateTime)"
+              - "updatedAt (DateTime)"
+            relations:
+              - "subscription (one-to-one)"
+              - "usage (one-to-many)"
+          
+          - name: "Subscription"
+            fields:
+              - "id (ObjectId, primary key)"
+              - "userId (ObjectId, foreign key)"
+              - "stripeCustomerId (String, unique)"
+              - "stripeSubscriptionId (String, unique, optional)"
+              - "status (SubscriptionStatus enum)"
+              - "plan (SubscriptionPlan enum)"
+              - "currentPeriodStart (DateTime, optional)"
+              - "currentPeriodEnd (DateTime, optional)"
+              - "cancelAtPeriodEnd (Boolean)"
+              - "createdAt (DateTime)"
+              - "updatedAt (DateTime)"
+            enums:
+              - "SubscriptionStatus: ACTIVE, INACTIVE, CANCELED, PAST_DUE, TRIALING"
+              - "SubscriptionPlan: FREE, STARTER, CORE, ADVANCED, MAX"
+          
+          - name: "Usage"
+            fields:
+              - "id (ObjectId, primary key)"
+              - "userId (ObjectId, foreign key)"
+              - "type (UsageType enum)"
+              - "amount (Int - credits/requests used)"
+              - "description (String, optional)"
+              - "metadata (Json, optional)"
+              - "createdAt (DateTime)"
+            enums:
+              - "UsageType: AI_REQUEST, API_CALL, INTEGRATION_SYNC, EXPORT_REPORT"
+
+    user_interface:
+      - name: "Modern UI Components"
+        description: "shadcn/ui based component library with dark mode support"
+        components:
+          - "components/ui/button.tsx - Button variants and sizes"
+          - "components/ui/card.tsx - Card layouts"
+          - "components/ui/dialog.tsx - Modal dialogs"
+          - "components/ui/progress.tsx - Progress bars"
+          - "components/ui/badge.tsx - Status badges"
+          - "components/ui/separator.tsx - Visual separators"
+          - "components/theme-provider.tsx - Theme context"
+          - "components/theme-toggle.tsx - Dark/light mode toggle"
+        features:
+          - "Responsive design (mobile-first)"
+          - "Dark/light mode support"
+          - "Smooth animations with Framer Motion"
+          - "Accessible components (ARIA compliant)"
+          - "Consistent design system"
+
+    pages_and_routes:
+      - name: "Application Routes"
+        description: "All application pages and their functionality"
+        pages:
+          - name: "Home Page (/)"
+            file: "app/page.tsx"
+            features:
+              - "Landing page with pricing cards"
+              - "Authentication-aware content"
+              - "Plan selection with Stripe checkout"
+              - "Free plan redirects to dashboard"
+              - "Responsive pricing grid"
+          
+          - name: "Dashboard (/dashboard)"
+            file: "app/dashboard/page.tsx"
+            features:
+              - "User welcome message"
+              - "Current plan display"
+              - "Usage statistics cards"
+              - "Quick action buttons"
+              - "Recent activity feed"
+              - "Upgrade prompts for free users"
+          
+          - name: "Billing Page (/dashboard/billing)"
+            file: "app/dashboard/billing/page.tsx"
+            features:
+              - "Current subscription details"
+              - "Billing history (mock data)"
+              - "Plan comparison grid"
+              - "Stripe billing portal access"
+              - "Upgrade/downgrade options"
+              - "Payment status indicators"
+          
+          - name: "Usage Analytics (/dashboard/usage)"
+            file: "app/dashboard/usage/page.tsx"
+            features:
+              - "Usage statistics overview"
+              - "Daily usage trends"
+              - "Usage by type breakdown"
+              - "Plan limits and progress bars"
+              - "Recent activity timeline"
+              - "Export functionality (UI only)"
+          
+          - name: "Profile Page (/dashboard/profile)"
+            file: "app/dashboard/profile/page.tsx"
+            features:
+              - "User profile information"
+              - "Auth0 user data display"
+              - "Profile picture display"
+              - "JSON user data dump (dev mode)"
+          
+          - name: "Settings Page (/dashboard/settings)"
+            file: "app/dashboard/settings/page.tsx"
+            features:
+              - "Account settings (placeholder)"
+              - "Theme preferences"
+              - "Notification settings"
+
+    api_endpoints:
+      - name: "REST API Routes"
+        description: "Backend API endpoints for data management"
+        endpoints:
+          - name: "User Management"
+            routes:
+              - "GET /api/user - Get current user data with subscription"
+              - "POST /api/user - Update user information"
+          
+          - name: "Checkout & Billing"
+            routes:
+              - "POST /api/checkout - Create Stripe checkout session"
+              - "POST /api/billing/portal - Create billing portal session"
+              - "POST /api/stripe/webhook - Handle Stripe webhooks"
+          
+          - name: "Stripe Integration"
+            routes:
+              - "POST /api/stripe/create-checkout-session - Legacy checkout"
+              - "POST /api/stripe/create-portal-session - Legacy portal"
+
+    utility_functions:
+      - name: "Helper Libraries"
+        description: "Utility functions and business logic"
+        files:
+          - name: "lib/subscription.ts"
+            functions:
+              - "getUserSubscriptionLevel() - Get user's current plan"
+              - "getUserSubscriptionInfo() - Get detailed subscription data"
+              - "hasActiveSubscription() - Check if user has active subscription"
+              - "hasFeatureAccess() - Check feature access by plan"
+              - "getSubscriptionLimits() - Get plan-specific limits"
+          
+          - name: "lib/utils.ts"
+            functions:
+              - "cn() - Class name utility for Tailwind"
+          
+          - name: "lib/prisma.ts"
+            functions:
+              - "Prisma client configuration"
+              - "Database connection management"
+
+    testing_setup:
+      - name: "Testing Infrastructure"
+        description: "Jest testing setup with React Testing Library"
+        files:
+          - "jest.config.ts - Jest configuration"
+          - "jest.setup.ts - Test setup file"
+          - "babel.config.js - Babel configuration"
+          - "__tests__/ - Test files directory"
+          - "__mocks__/ - Manual mocks directory"
+        test_files:
+          - "__tests__/Button.test.tsx - Button component tests"
+          - "__tests__/AuthProfile.test.tsx - Profile page tests"
+        mock_setup:
+          - "Auth0 client mocking"
+          - "Manual mock for @auth0/nextjs-auth0"
+          - "TypeScript declaration files"
+
+    environment_configuration:
+      - name: "Environment Variables"
+        description: "Required environment variables for deployment"
+        auth0:
+          - "AUTH0_SECRET - Auth0 application secret"
+          - "AUTH0_BASE_URL - Application base URL"
+          - "AUTH0_ISSUER_BASE_URL - Auth0 domain"
+          - "AUTH0_CLIENT_ID - Auth0 application ID"
+          - "AUTH0_CLIENT_SECRET - Auth0 application secret"
+          - "APP_BASE_URL - Application base URL"
+        stripe:
+          - "STRIPE_SECRET_KEY - Stripe secret key"
+          - "STRIPE_WEBHOOK_SECRET - Webhook endpoint secret"
+          - "NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID - Starter plan price ID"
+          - "NEXT_PUBLIC_STRIPE_CORE_PRICE_ID - Core plan price ID"
+          - "NEXT_PUBLIC_STRIPE_ADVANCED_PRICE_ID - Advanced plan price ID"
+          - "NEXT_PUBLIC_STRIPE_MAX_PRICE_ID - Max plan price ID"
+        database:
+          - "DATABASE_URL - MongoDB connection string"
+
+    deployment_scripts:
+      - name: "Utility Scripts"
+        description: "Development and maintenance scripts"
+        categories:
+          - name: "Environment Setup"
+            scripts:
+              - "scripts/add-auth0-env.js - Add Auth0 environment variables"
+              - "scripts/setup-auth0.js - Auth0 configuration setup"
+              - "scripts/validate-env.ts - Environment validation"
+          
+          - name: "Database Management"
+            scripts:
+              - "scripts/fix-all-missing-subscriptions.ts - Fix subscription data"
+              - "scripts/fix-user-subscription.ts - Fix individual subscriptions"
+              - "scripts/add-sample-usage.ts - Add sample usage data"
+          
+          - name: "Testing & Debugging"
+            scripts:
+              - "scripts/test-subscription.ts - Test subscription flow"
+              - "scripts/test-webhook.ts - Test webhook processing"
+              - "scripts/debug-billing-portal.ts - Debug billing portal"
+              - "scripts/debug-subscription-upgrade.ts - Debug upgrades"
+
+  scenarios:
+    - name: "Complete User Journey - Free to Paid"
+      steps:
+        - navigate: "/"
+        - expect:
+            contains: "ZenPortal"
+            visible: "[data-testid='pricing-cards']"
+        - click: "a[href='/auth/login']"
+        - action: "complete Auth0 login"
+        - expect:
+            url: "/dashboard"
+            contains: "Welcome back"
+        - navigate: "/dashboard/billing"
+        - expect:
+            contains: "No Active Subscription"
+            visible: "[data-testid='upgrade-button']"
+        - click: "[data-testid='upgrade-button']"
+        - expect:
+            redirected_to: "stripe.com/checkout"
+        - action: "complete Stripe checkout"
+        - expect:
+            url: "/dashboard?checkout=success"
+            contains: "You're now on the Pro plan"
+
+    - name: "Usage Analytics Dashboard"
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard/usage"
+        - expect:
+            visible:
+              - "[data-testid='usage-stats-cards']"
+              - "[data-testid='usage-progress-bar']"
+              - "[data-testid='daily-usage-chart']"
+            contains:
+              - "Total Requests"
+              - "Credits Used"
+              - "Usage Analytics"
+
+    - name: "Billing Portal Access"
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard/billing"
+        - click: "[data-testid='manage-billing-button']"
+        - expect:
+            redirected_to: "stripe.com/billing"
+        - action: "complete billing portal actions"
+        - expect:
+            url: "/dashboard/billing"
+            contains: "Billing & Subscription"
+
+    - name: "Webhook Processing"
+      steps:
+        - webhook_event: "checkout.session.completed"
+        - expect:
+            database_updated:
+              - "subscription.status = 'ACTIVE'"
+              - "subscription.plan = 'STARTER'"
+              - "subscription.stripeCustomerId set"
+        - webhook_event: "customer.subscription.updated"
+        - expect:
+            database_updated:
+              - "subscription.plan updated"
+              - "subscription.currentPeriodEnd updated"
+
+    - name: "Feature Access Control"
+      steps:
+        - login_as: "free_user@example.com"
+        - expect:
+            feature_access:
+              - "basic_dashboard: true"
+              - "premium_llm_calls: false"
+              - "claude_opus: false"
+        - login_as: "max_user@example.com"
+        - expect:
+            feature_access:
+              - "basic_dashboard: true"
+              - "premium_llm_calls: true"
+              - "claude_opus: true"
+              - "high_limits: true"
+
+  technical_requirements:
+    node_version: ">=18.0.0"
+    next_version: "15.5.4"
+    react_version: "19.1.0"
+    typescript_version: "^5"
+    database: "MongoDB Atlas or local MongoDB"
+    deployment: "Vercel (recommended) or any Node.js hosting"
+    
+  performance_considerations:
+    - "Prisma connection pooling for database efficiency"
+    - "Auth0 session caching for reduced API calls"
+    - "Stripe webhook idempotency for reliable processing"
+    - "Image optimization with Next.js Image component"
+    - "Code splitting with dynamic imports"
+    - "Responsive images and lazy loading"
+
+  security_features:
+    - "Auth0 OAuth2 authentication with secure sessions"
+    - "Stripe webhook signature verification"
+    - "Environment variable protection"
+    - "CSRF protection via Auth0"
+    - "Secure HTTP headers"
+    - "Input validation and sanitization"
+    - "Rate limiting on API endpoints (recommended)"

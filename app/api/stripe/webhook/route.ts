@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { prisma } from "@/lib/prisma"
+import Stripe from "stripe"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -14,6 +15,25 @@ function planFromPriceId(priceId?: string | null): "STARTER" | "CORE" | "ADVANCE
   return "FREE"
 }
 
+function mapStripeStatusToPrisma(status: string): "ACTIVE" | "INACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING" {
+  switch (status.toLowerCase()) {
+    case "active":
+      return "ACTIVE"
+    case "trialing":
+      return "TRIALING"
+    case "past_due":
+      return "PAST_DUE"
+    case "canceled":
+    case "cancelled":
+      return "CANCELED"
+    case "incomplete":
+    case "incomplete_expired":
+    case "unpaid":
+    default:
+      return "INACTIVE"
+  }
+}
+
 export async function POST(req: NextRequest) {
   const signature = req.headers.get("stripe-signature")
   if (!signature || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -22,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.text()
 
-  let event
+  let event: Stripe.Event
   try {
     event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET)
     console.log("Webhook received event:", event.type, event.id)
@@ -34,10 +54,10 @@ export async function POST(req: NextRequest) {
   try {
     switch (event.type) {
       case "checkout.session.completed": {
-        const session = event.data.object as any
-        const subscriptionId: string | undefined = session.subscription || undefined
-        const customerId: string | undefined = session.customer || undefined
-        const auth0Id: string | undefined = session.metadata?.auth0Id
+        const session = event.data.object as Stripe.Checkout.Session
+        const subscriptionId = session.subscription as string | undefined
+        const customerId = session.customer as string | undefined
+        const auth0Id = session.metadata?.auth0Id
 
         console.log("Checkout session completed:", {
           sessionId: session.id,
@@ -46,6 +66,23 @@ export async function POST(req: NextRequest) {
           auth0Id,
           metadata: session.metadata
         })
+
+        if (!auth0Id) {
+          console.error("No auth0Id found in session metadata")
+          break
+        }
+
+        if (!customerId) {
+          console.error("No customerId found in session")
+          break
+        }
+
+        // Find user by auth0Id
+        const user = await prisma.user.findUnique({ where: { auth0Id } })
+        if (!user) {
+          console.error("User not found for auth0Id:", auth0Id)
+          break
+        }
 
         // Determine plan via the first line item if available
         let priceId: string | undefined
@@ -57,31 +94,20 @@ export async function POST(req: NextRequest) {
         }
         const plan = planFromPriceId(priceId)
 
-        if (!auth0Id) {
-          console.error("No auth0Id found in session metadata")
-          break
-        }
-
-        const user = await prisma.user.findUnique({ where: { auth0Id } })
-        if (!user) {
-          console.error("User not found for auth0Id:", auth0Id)
-          break
-        }
-
         console.log("Creating/updating subscription for user:", user.id, "with customerId:", customerId)
 
         await prisma.subscription.upsert({
-          where: { stripeCustomerId: customerId! },
+          where: { userId: user.id },
           update: {
-            stripeCustomerId: customerId || undefined,
-            stripeSubscriptionId: subscriptionId || undefined,
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscriptionId,
             status: "ACTIVE",
             plan,
             currentPeriodStart: session.created ? new Date(session.created * 1000) : undefined,
           },
           create: {
             userId: user.id,
-            stripeCustomerId: customerId || "",
+            stripeCustomerId: customerId,
             stripeSubscriptionId: subscriptionId,
             status: "ACTIVE",
             plan,
@@ -92,41 +118,174 @@ export async function POST(req: NextRequest) {
         console.log("Subscription created/updated successfully")
         break
       }
-      case "customer.subscription.updated":
-      case "customer.subscription.created": {
-        const sub = event.data.object as any
-        const customerId: string = sub.customer
-        const priceId: string | undefined = sub.items?.data?.[0]?.price?.id
-        const plan = planFromPriceId(priceId)
 
-        const user = await prisma.user.findFirst({ where: { subscription: { stripeCustomerId: customerId } } })
-        if (!user) break
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription
+        const customerId = subscription.customer as string
+        const priceId = subscription.items.data[0]?.price.id
+        const plan = planFromPriceId(priceId)
+        const status = mapStripeStatusToPrisma(subscription.status)
+
+        console.log("Subscription created/updated:", {
+          subscriptionId: subscription.id,
+          customerId,
+          priceId,
+          plan,
+          status: subscription.status
+        })
+
+        // Find user by customer ID - try multiple approaches
+        let user = await prisma.user.findFirst({
+          where: { subscription: { stripeCustomerId: customerId } },
+          include: { subscription: true }
+        })
+
+        // If not found by subscription, try to find by email in Stripe customer
+        if (!user) {
+          try {
+            const stripeCustomer = await stripe.customers.retrieve(customerId)
+            if (stripeCustomer && !stripeCustomer.deleted && stripeCustomer.email) {
+              user = await prisma.user.findUnique({
+                where: { email: stripeCustomer.email },
+                include: { subscription: true }
+              })
+              console.log("Found user by email from Stripe customer:", user?.id)
+            }
+          } catch (error) {
+            console.error("Error fetching Stripe customer:", error)
+          }
+        }
+
+        if (!user) {
+          console.error("User not found for customerId:", customerId)
+          break
+        }
+
+        // If this is a new subscription and user already has an active subscription,
+        // cancel the old one to prevent multiple active subscriptions
+        if (subscription.status === 'active' && user.subscription?.status === 'ACTIVE') {
+          console.log("User already has active subscription, canceling old one")
+          try {
+            if (user.subscription.stripeSubscriptionId) {
+              await stripe.subscriptions.cancel(user.subscription.stripeSubscriptionId)
+              console.log("Canceled old subscription:", user.subscription.stripeSubscriptionId)
+            }
+          } catch (error) {
+            console.error("Error canceling old subscription:", error)
+          }
+        }
+
+        // Use upsert to handle cases where subscription doesn't exist yet
+        // If user already has a subscription, update it with the new one
+        await prisma.subscription.upsert({
+          where: { userId: user.id },
+          update: {
+            status,
+            plan,
+            currentPeriodStart: (subscription as any).current_period_start
+              ? new Date((subscription as any).current_period_start * 1000)
+              : undefined,
+            currentPeriodEnd: (subscription as any).current_period_end
+              ? new Date((subscription as any).current_period_end * 1000)
+              : undefined,
+            cancelAtPeriodEnd: subscription.cancel_at_period_end,
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscription.id,
+          },
+          create: {
+            userId: user.id,
+            status,
+            plan,
+            currentPeriodStart: (subscription as any).current_period_start
+              ? new Date((subscription as any).current_period_start * 1000)
+              : undefined,
+            currentPeriodEnd: (subscription as any).current_period_end
+              ? new Date((subscription as any).current_period_end * 1000)
+              : undefined,
+            cancelAtPeriodEnd: subscription.cancel_at_period_end,
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscription.id,
+          },
+        })
+
+        console.log("Subscription upserted successfully for user:", user.id)
+        break
+      }
+
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription
+        const customerId = subscription.customer as string
+
+        console.log("Subscription deleted:", {
+          subscriptionId: subscription.id,
+          customerId
+        })
+
+        const user = await prisma.user.findFirst({
+          where: { subscription: { stripeCustomerId: customerId } },
+          include: { subscription: true }
+        })
+
+        if (!user) {
+          console.error("User not found for customerId:", customerId)
+          break
+        }
 
         await prisma.subscription.update({
           where: { userId: user.id },
           data: {
-            status: (sub.status || "active").toUpperCase(),
-            plan,
-            currentPeriodStart: sub.current_period_start ? new Date(sub.current_period_start * 1000) : undefined,
-            currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : undefined,
-            cancelAtPeriodEnd: !!sub.cancel_at_period_end,
-            stripeSubscriptionId: sub.id,
+            status: "CANCELED",
+            stripeSubscriptionId: null,
           },
         })
         break
       }
-      case "customer.subscription.deleted": {
-        const sub = event.data.object as any
-        const customerId: string = sub.customer
-        const user = await prisma.user.findFirst({ where: { subscription: { stripeCustomerId: customerId } } })
-        if (!user) break
-        await prisma.subscription.update({
-          where: { userId: user.id },
-          data: { status: "CANCELED" },
-        })
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice
+        const subscriptionId = (invoice as any).subscription as string | undefined
+
+        if (subscriptionId) {
+          console.log("Invoice payment succeeded for subscription:", subscriptionId)
+
+          const subscription = await prisma.subscription.findUnique({
+            where: { stripeSubscriptionId: subscriptionId }
+          })
+
+          if (subscription) {
+            await prisma.subscription.update({
+              where: { stripeSubscriptionId: subscriptionId },
+              data: { status: "ACTIVE" },
+            })
+          }
+        }
         break
       }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice
+        const subscriptionId = (invoice as any).subscription as string | undefined
+
+        if (subscriptionId) {
+          console.log("Invoice payment failed for subscription:", subscriptionId)
+
+          const subscription = await prisma.subscription.findUnique({
+            where: { stripeSubscriptionId: subscriptionId }
+          })
+
+          if (subscription) {
+            await prisma.subscription.update({
+              where: { stripeSubscriptionId: subscriptionId },
+              data: { status: "PAST_DUE" },
+            })
+          }
+        }
+        break
+      }
+
       default:
+        console.log(`Unhandled event type: ${event.type}`)
         break
     }
 
@@ -137,129 +296,3 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// import { NextRequest, NextResponse } from 'next/server'
-// import { stripe, STRIPE_CONFIG } from '@/lib/stripe'
-// import { prisma } from '@/lib/prisma'
-// import Stripe from 'stripe'
-// type PrismaSubscriptionPlan = 'FREE' | 'PRO' | 'ENTERPRISE' | 'STARTER' | 'CORE' | 'ADVANCED' | 'MAX'
-
-// export async function POST(req: NextRequest) {
-//   const body = await req.text()
-//   const signature = req.headers.get('stripe-signature')
-
-//   if (!signature) {
-//     return NextResponse.json({ error: 'No signature' }, { status: 400 })
-//   }
-
-//   let event: Stripe.Event
-
-//   try {
-//     event = stripe.webhooks.constructEvent(
-//       body,
-//       signature,
-//       STRIPE_CONFIG.webhookSecret
-//     )
-//   } catch (err) {
-//     console.error('Webhook signature verification failed:', err)
-//     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
-//   }
-
-//   try {
-//     switch (event.type) {
-//       case 'customer.subscription.created':
-//       case 'customer.subscription.updated': {
-//         const subscription = event.data.object as Stripe.Subscription
-
-//         const priceId = subscription.items.data[0]?.price.id
-//         const mappedPlan: PrismaSubscriptionPlan = (() => {
-//           if (priceId === STRIPE_CONFIG.prices.starter) return 'STARTER'
-//           if (priceId === STRIPE_CONFIG.prices.core) return 'CORE'
-//           if (priceId === STRIPE_CONFIG.prices.advanced) return 'ADVANCED'
-//           if (priceId === STRIPE_CONFIG.prices.max) return 'MAX'
-//           return 'FREE'
-//         })()
-
-//         const subWithPeriods = subscription as Stripe.Subscription & {
-//           current_period_start: number
-//           current_period_end: number
-//         }
-
-//         await prisma.subscription.upsert({
-//           where: { stripeSubscriptionId: subscription.id },
-//           update: {
-//             status: subscription.status as 'ACTIVE' | 'INACTIVE' | 'CANCELED' | 'PAST_DUE' | 'TRIALING',
-//             currentPeriodStart: new Date(subWithPeriods.current_period_start * 1000),
-//             currentPeriodEnd: new Date(subWithPeriods.current_period_end * 1000),
-//             cancelAtPeriodEnd: subscription.cancel_at_period_end,
-//             updatedAt: new Date(),
-//             plan: mappedPlan,
-//           },
-//           create: {
-//             stripeCustomerId: subscription.customer as string,
-//             stripeSubscriptionId: subscription.id,
-//             status: subscription.status as 'ACTIVE' | 'INACTIVE' | 'CANCELED' | 'PAST_DUE' | 'TRIALING',
-//             plan: mappedPlan,
-//             currentPeriodStart: new Date(subWithPeriods.current_period_start * 1000),
-//             currentPeriodEnd: new Date(subWithPeriods.current_period_end * 1000),
-//             cancelAtPeriodEnd: subscription.cancel_at_period_end,
-//             userId: '', // Will be updated by customer lookup
-//           },
-//         })
-//         break
-//       }
-
-//       case 'customer.subscription.deleted': {
-//         const subscription = event.data.object as Stripe.Subscription
-
-//         await prisma.subscription.update({
-//           where: { stripeSubscriptionId: subscription.id },
-//           data: {
-//             status: 'CANCELED',
-//             updatedAt: new Date(),
-//           },
-//         })
-//         break
-//       }
-
-//       case 'invoice.payment_succeeded': {
-//         const invoice = event.data.object as Stripe.Invoice
-//         const invoiceWithSub = invoice as Stripe.Invoice & { subscription?: string }
-
-//         if (invoiceWithSub.subscription) {
-//           await prisma.subscription.update({
-//             where: { stripeSubscriptionId: invoiceWithSub.subscription as string },
-//             data: {
-//               status: 'ACTIVE',
-//               updatedAt: new Date(),
-//             },
-//           })
-//         }
-//         break
-//       }
-
-//       case 'invoice.payment_failed': {
-//         const invoice = event.data.object as Stripe.Invoice
-//         const invoiceWithSub = invoice as Stripe.Invoice & { subscription?: string }
-
-//         if (invoiceWithSub.subscription) {
-//           await prisma.subscription.update({
-//             where: { stripeSubscriptionId: invoiceWithSub.subscription as string },
-//             data: {
-//               status: 'PAST_DUE',
-//               updatedAt: new Date(),
-//             },
-//           })
-//         }
-//         break
-//       }
-//     }
-
-//     return NextResponse.json({ received: true })
-//   } catch (error) {
-//     console.error('Error processing webhook:', error)
-//     return NextResponse.json(
-//       { error: 'Webhook processing failed' },
-//       { status: 500 }
-//     )
-//   }
-// }

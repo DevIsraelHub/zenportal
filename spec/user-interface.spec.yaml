@@ -1,0 +1,319 @@
+metadata:
+  author: "Ejeh Israel"
+  date: "2025-01-17"
+  feature: "ZenPortal User Interface & Experience"
+  version: "1.0.0"
+
+spec:
+  name: User Interface & Experience System
+  description: |
+    Modern, responsive UI built with shadcn/ui components, dark mode support,
+    smooth animations, and accessible design patterns.
+
+  scenarios:
+    - name: Landing page with pricing cards
+      steps:
+        - navigate: "/"
+        - expect:
+            visible:
+              - "[data-testid='zenportal-logo']"
+              - "[data-testid='pricing-cards']"
+              - "[data-testid='login-button']"
+            contains:
+              - "ZenPortal"
+              - "Modern Customer Portal"
+              - "Free"
+              - "Starter"
+              - "Core"
+              - "Advanced"
+              - "Max"
+
+    - name: Responsive pricing grid layout
+      steps:
+        - navigate: "/"
+        - viewport: "mobile"
+        - expect:
+            layout: "Single column"
+            cards: "Stacked vertically"
+        - viewport: "tablet"
+        - expect:
+            layout: "Two columns"
+            cards: "Side by side"
+        - viewport: "desktop"
+        - expect:
+            layout: "Five columns"
+            cards: "All visible"
+
+    - name: Dark mode toggle functionality
+      steps:
+        - navigate: "/"
+        - expect:
+            theme: "light"
+            visible: "[data-testid='theme-toggle']"
+        - click: "[data-testid='theme-toggle']"
+        - expect:
+            theme: "dark"
+            background: "dark"
+            text: "light"
+        - click: "[data-testid='theme-toggle']"
+        - expect:
+            theme: "light"
+
+    - name: Smooth page transitions and animations
+      steps:
+        - navigate: "/"
+        - expect:
+            animations: "Framer Motion enabled"
+            transitions: "Smooth fade-in"
+        - click: "a[href='/auth/login']"
+        - expect:
+            transition: "Smooth navigation"
+        - action: "complete login"
+        - expect:
+            url: "/dashboard"
+            animation: "Welcome message fade-in"
+
+    - name: Dashboard layout and components
+      steps:
+        - login_as: "user@example.com"
+        - navigate: "/dashboard"
+        - expect:
+            visible:
+              - "[data-testid='welcome-header']"
+              - "[data-testid='stats-cards']"
+              - "[data-testid='current-plan-card']"
+              - "[data-testid='recent-activity-card']"
+              - "[data-testid='quick-actions-card']"
+            contains:
+              - "Welcome back"
+              - "AI Credits Used"
+              - "API Calls"
+              - "Active Integrations"
+
+    - name: Card component interactions
+      steps:
+        - navigate: "/dashboard"
+        - expect:
+            cards:
+              - "Hover effects on interactive cards"
+              - "Shadow elevation on hover"
+              - "Smooth transitions"
+        - hover: "[data-testid='current-plan-card']"
+        - expect:
+            effect: "Elevated shadow"
+            transition: "Smooth"
+
+    - name: Button variants and states
+      steps:
+        - navigate: "/dashboard/billing"
+        - expect:
+            buttons:
+              - "Primary buttons with solid background"
+              - "Outline buttons with border"
+              - "Ghost buttons with transparent background"
+              - "Disabled state styling"
+        - click: "[data-testid='upgrade-button']"
+        - expect:
+            loading_state: "Button shows loading spinner"
+            disabled: "Button becomes disabled"
+
+    - name: Progress bar component
+      steps:
+        - navigate: "/dashboard"
+        - expect:
+            visible: "[data-testid='usage-progress-bar']"
+            progress: "57%"
+            color: "Primary theme color"
+        - navigate: "/dashboard/usage"
+        - expect:
+            progress_bars:
+              - "Usage against limits"
+              - "Animated progress fill"
+              - "Percentage labels"
+
+    - name: Badge component usage
+      steps:
+        - navigate: "/dashboard/billing"
+        - expect:
+            badges:
+              - "Plan badges (FREE, STARTER, CORE, etc.)"
+              - "Status badges (ACTIVE, PAST_DUE, CANCELED)"
+              - "Feature badges (Most Popular)"
+            colors:
+              - "Default badges for current plan"
+              - "Outline badges for other plans"
+              - "Success badges for paid status"
+
+    - name: Dialog modal functionality
+      steps:
+        - navigate: "/dashboard"
+        - expect:
+            modals: "shadcn Dialog components"
+            accessibility: "ARIA compliant"
+            backdrop: "Semi-transparent overlay"
+        - click: "[data-testid='open-modal-button']"
+        - expect:
+            modal: "Centered on screen"
+            focus: "Trapped within modal"
+            escape: "Closes on Escape key"
+
+    - name: Form components and validation
+      steps:
+        - navigate: "/dashboard/settings"
+        - expect:
+            forms:
+              - "Input fields with proper labels"
+              - "Validation error states"
+              - "Success states"
+              - "Loading states"
+        - fill_form:
+            field: "email"
+            value: "invalid-email"
+        - submit_form
+        - expect:
+            validation: "Email format error"
+            error_style: "Red border and error message"
+
+    - name: Navigation and routing
+      steps:
+        - navigate: "/dashboard"
+        - expect:
+            navigation:
+              - "Dashboard link active"
+              - "Billing link inactive"
+        - click: "a[href='/dashboard/billing']"
+        - expect:
+            url: "/dashboard/billing"
+            navigation: "Billing link active"
+            breadcrumb: "Dashboard > Billing"
+
+    - name: Loading states and skeletons
+      steps:
+        - navigate: "/dashboard/billing"
+        - expect:
+            loading_state: "Skeleton placeholders"
+            animation: "Pulse animation"
+        - wait_for: "Data loaded"
+        - expect:
+            content: "Real data displayed"
+            skeletons: "Hidden"
+
+    - name: Error states and messaging
+      steps:
+        - navigate: "/dashboard/billing"
+        - api_call: "POST /api/billing/portal"
+        - mock_response: { error: "Service unavailable" }
+        - expect:
+            error_message: "Billing portal is not configured"
+            error_style: "Toast notification"
+            color: "Red/error theme"
+
+    - name: Success states and feedback
+      steps:
+        - navigate: "/dashboard/billing"
+        - click: "[data-testid='upgrade-button']"
+        - action: "complete checkout"
+        - expect:
+            success_message: "Subscription updated successfully"
+            success_style: "Toast notification"
+            color: "Green/success theme"
+
+    - name: Accessibility compliance
+      steps:
+        - navigate: "/"
+        - expect:
+            accessibility:
+              - "Proper heading hierarchy (h1, h2, h3)"
+              - "Alt text for images"
+              - "ARIA labels for interactive elements"
+              - "Keyboard navigation support"
+              - "Screen reader compatibility"
+        - keyboard_navigation: "Tab through elements"
+        - expect:
+            focus: "Visible focus indicators"
+            order: "Logical tab order"
+
+    - name: Mobile responsiveness
+      steps:
+        - viewport: "320px width"
+        - navigate: "/"
+        - expect:
+            layout: "Mobile-first design"
+            text: "Readable font sizes"
+            buttons: "Touch-friendly sizes"
+            spacing: "Adequate touch targets"
+        - viewport: "768px width"
+        - expect:
+            layout: "Tablet layout"
+            grid: "Two-column pricing"
+        - viewport: "1024px width"
+        - expect:
+            layout: "Desktop layout"
+            grid: "Full five-column pricing"
+
+    - name: Component library consistency
+      steps:
+        - navigate: "/dashboard"
+        - expect:
+            design_system:
+              - "Consistent color palette"
+              - "Unified typography scale"
+              - "Consistent spacing system"
+              - "Standardized border radius"
+              - "Unified shadow system"
+
+    - name: Interactive elements feedback
+      steps:
+        - navigate: "/dashboard/billing"
+        - hover: "[data-testid='plan-card']"
+        - expect:
+            feedback: "Hover state change"
+            cursor: "Pointer cursor"
+        - click: "[data-testid='plan-card']"
+        - expect:
+            feedback: "Active state"
+            selection: "Visual selection indicator"
+
+    - name: Data visualization components
+      steps:
+        - navigate: "/dashboard/usage"
+        - expect:
+            charts:
+              - "Usage trend bar chart"
+              - "Interactive hover tooltips"
+              - "Responsive scaling"
+              - "Accessible color scheme"
+        - hover: "chart_bar"
+        - expect:
+            tooltip: "Usage data display"
+            highlight: "Bar highlight effect"
+
+    - name: Toast notification system
+      steps:
+        - navigate: "/dashboard/billing"
+        - action: "trigger error"
+        - expect:
+            toast:
+              - "Appears at top-right"
+              - "Auto-dismisses after 5 seconds"
+              - "Dismissible with close button"
+              - "Stacks multiple toasts"
+        - action: "trigger success"
+        - expect:
+            toast:
+              - "Success styling (green)"
+              - "Different icon for success"
+              - "Non-blocking overlay"
+
+    - name: Theme persistence
+      steps:
+        - navigate: "/"
+        - click: "[data-testid='theme-toggle']"
+        - expect:
+            theme: "dark"
+        - navigate: "/dashboard"
+        - expect:
+            theme: "dark (persisted)"
+        - refresh_page
+        - expect:
+            theme: "dark (still persisted)"

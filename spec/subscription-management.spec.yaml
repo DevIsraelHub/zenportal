@@ -1,0 +1,200 @@
+metadata:
+  author: "Ejeh Israel"
+  date: "2025-01-17"
+  feature: "ZenPortal Subscription Management System"
+  version: "1.0.0"
+
+spec:
+  name: Subscription Management System
+  description: |
+    Complete subscription lifecycle management with Stripe integration,
+    multi-tier plans, usage tracking, and billing portal access.
+
+  scenarios:
+    - name: User subscribes to Starter plan
+      steps:
+        - login_as: "newuser@example.com"
+        - navigate: "/dashboard/billing"
+        - click: "[data-testid='starter-plan-button']"
+        - expect:
+            redirected_to: "stripe.com/checkout"
+        - action: "complete Stripe checkout with valid payment method"
+        - expect:
+            url: "/dashboard?checkout=success"
+            contains: "You're now on the Starter plan"
+        - verify_db:
+            collection: "subscriptions"
+            query: { userId: "user_id" }
+            expect:
+              status: "ACTIVE"
+              plan: "STARTER"
+              stripeCustomerId: "cus_*"
+              stripeSubscriptionId: "sub_*"
+
+    - name: User upgrades from Starter to Core plan
+      steps:
+        - login_as: "starter_user@example.com"
+        - navigate: "/dashboard/billing"
+        - click: "[data-testid='core-plan-button']"
+        - expect:
+            redirected_to: "stripe.com/checkout"
+        - action: "complete Stripe checkout"
+        - expect:
+            url: "/dashboard"
+            contains: "You're now on the Core plan"
+        - verify_db:
+            collection: "subscriptions"
+            query: { userId: "user_id" }
+            expect:
+              plan: "CORE"
+              status: "ACTIVE"
+
+    - name: User cancels subscription
+      steps:
+        - login_as: "paid_user@example.com"
+        - navigate: "/dashboard/billing"
+        - click: "[data-testid='manage-billing-button']"
+        - expect:
+            redirected_to: "stripe.com/billing"
+        - action: "cancel subscription in Stripe portal"
+        - expect:
+            url: "/dashboard/billing"
+        - webhook_event: "customer.subscription.deleted"
+        - expect:
+            database_updated:
+              - "subscription.status = 'CANCELED'"
+              - "subscription.stripeSubscriptionId = null"
+
+    - name: Payment fails and subscription goes past due
+      steps:
+        - webhook_event: "invoice.payment_failed"
+        - expect:
+            database_updated:
+              - "subscription.status = 'PAST_DUE'"
+        - navigate: "/dashboard/billing"
+        - expect:
+            contains: "past due"
+            visible: "[data-testid='payment-failed-warning']"
+
+    - name: Payment succeeds after failure
+      steps:
+        - webhook_event: "invoice.payment_succeeded"
+        - expect:
+            database_updated:
+              - "subscription.status = 'ACTIVE'"
+        - navigate: "/dashboard/billing"
+        - expect:
+            contains: "active"
+            not_visible: "[data-testid='payment-failed-warning']"
+
+    - name: Free plan user sees upgrade prompts
+      steps:
+        - login_as: "free_user@example.com"
+        - navigate: "/dashboard"
+        - expect:
+            visible: "[data-testid='upgrade-prompt']"
+            contains: "Upgrade to unlock premium features"
+        - navigate: "/dashboard/billing"
+        - expect:
+            visible: "[data-testid='start-free-trial-button']"
+            contains: "Start Free Trial"
+
+    - name: Subscription limits enforcement
+      steps:
+        - login_as: "starter_user@example.com"
+        - api_call: "GET /api/user"
+        - expect:
+            response:
+              subscription:
+                plan: "STARTER"
+                limits:
+                  dailyLLMCalls: 200
+                  repositories: 3
+                  teamMembers: 1
+
+    - name: Feature access based on subscription level
+      steps:
+        - login_as: "free_user@example.com"
+        - api_call: "POST /api/check-feature-access"
+        - body: { feature: "premium_llm_calls" }
+        - expect:
+            response:
+              hasAccess: false
+        - login_as: "core_user@example.com"
+        - api_call: "POST /api/check-feature-access"
+        - body: { feature: "premium_llm_calls" }
+        - expect:
+            response:
+              hasAccess: true
+
+    - name: Billing portal access for active subscribers
+      steps:
+        - login_as: "paid_user@example.com"
+        - api_call: "POST /api/billing/portal"
+        - expect:
+            response:
+              url: "https://billing.stripe.com/session/*"
+        - navigate: "/dashboard/billing"
+        - click: "[data-testid='manage-billing-button']"
+        - expect:
+            redirected_to: "stripe.com/billing"
+
+    - name: Billing portal error handling
+      steps:
+        - login_as: "user_without_subscription@example.com"
+        - api_call: "POST /api/billing/portal"
+        - expect:
+            status: 400
+            response:
+              error: "No subscription found"
+
+    - name: Checkout session creation with metadata
+      steps:
+        - login_as: "user@example.com"
+        - api_call: "POST /api/checkout"
+        - body: { priceId: "price_starter" }
+        - expect:
+            response:
+              id: "cs_*"
+              url: "https://checkout.stripe.com/c/pay/*"
+        - verify_stripe:
+            checkout_session:
+              metadata:
+                auth0Id: "auth0|*"
+                userId: "user_id"
+
+    - name: Webhook signature verification
+      steps:
+        - webhook_request: "POST /api/stripe/webhook"
+        - headers:
+            stripe-signature: "invalid_signature"
+        - expect:
+            status: 400
+            response:
+              error: "Invalid signature"
+
+    - name: Duplicate subscription prevention
+      steps:
+        - login_as: "user_with_active_subscription@example.com"
+        - api_call: "POST /api/checkout"
+        - body: { priceId: "price_starter" }
+        - expect:
+            status: 400
+            response:
+              error: "You already have an active subscription"
+
+    - name: Email conflict resolution during checkout
+      steps:
+        - login_as: "user_with_existing_email@example.com"
+        - api_call: "POST /api/checkout"
+        - body: { priceId: "price_starter" }
+        - expect:
+            response:
+              id: "cs_*"
+              url: "https://checkout.stripe.com/c/pay/*"
+        - verify_db:
+            collection: "users"
+            query: { email: "user_with_existing_email@example.com" }
+            expect:
+              auth0Id: "auth0|*"
+              email: "user_with_existing_email@example.com"

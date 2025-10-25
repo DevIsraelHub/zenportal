@@ -16,13 +16,12 @@ spec:
               - "[role='dialog']"                            # accessibility role
             note: "Onboarding modal MUST use shadcn/ui Dialog component."
 
-    - name: Free plan selection completes onboarding and creates trial subscription
+    - name: Free plan selection completes onboarding and redirects to dashboard
       steps:
         - click: "[data-testid='plan-free']"
         - click: "[data-testid='continue-button']"
         - expect:
-            contains:
-              - "You're on the Free Trial plan"
+            url: "/dashboard"
             not_visible:
               - "[data-testid='onboarding-modal']"
         - verify_db:
@@ -31,12 +30,6 @@ spec:
             expect:
               plan: "free"
               onboardingCompleted: true
-        - verify_db:
-            collection: "subscriptions"
-            query: { email: "newuser@example.com" }
-            expect:
-              plan: "free"
-              status: "trial"
 
     - name: Starter plan selection (paid) through onboarding
       steps:
@@ -63,6 +56,46 @@ spec:
         - login_as: "newuser@example.com"
         - navigate: "/dashboard"
         - click: "[data-testid='plan-core']"
+        - click: "[data-testid='continue-button']"
+        - expect:
+            redirected_to: "stripe.com/checkout"
+        - action: "complete Stripe checkout"
+        - expect:
+            url: "/dashboard"
+            contains:
+              - "You're now on the Pro plan"
+        - verify_db:
+            collection: "subscriptions"
+            query: { email: "newuser@example.com" }
+            expect:
+              plan: "pro"
+              status: "active"
+
+    - name: Advanced plan selection (paid) through onboarding
+      steps:
+        - login_as: "newuser@example.com"
+        - navigate: "/dashboard"
+        - click: "[data-testid='plan-advanced']"
+        - click: "[data-testid='continue-button']"
+        - expect:
+            redirected_to: "stripe.com/checkout"
+        - action: "complete Stripe checkout"
+        - expect:
+            url: "/dashboard"
+            contains:
+              - "You're now on the Pro plan"
+        - verify_db:
+            collection: "subscriptions"
+            query: { email: "newuser@example.com" }
+            expect:
+              plan: "pro"
+              status: "active"
+
+    - name: Max plan selection (paid) through onboarding
+      steps:
+        - login_as: "newuser@example.com"
+        - navigate: "/dashboard"
+        - click: "[data-testid='plan-max']"
         - click: "[data-testid='continue-button']"
         - expect:
             redirected_to: "stripe.com/checkout"
@@ -126,6 +159,8 @@ spec:
               - "[data-testid='plan-free']"
               - "[data-testid='plan-starter']"
               - "[data-testid='plan-core']"
+              - "[data-testid='plan-advanced']"
+              - "[data-testid='plan-max']"
             contains:
               - "Free"
               - "$0"
@@ -133,4 +168,8 @@ spec:
               - "$19"
               - "Core"
               - "$49"
+              - "Advanced"
+              - "$119"
+              - "Max"
+              - "$250"
             note: "Plans should use shadcn/ui Card + Button components within Dialog."

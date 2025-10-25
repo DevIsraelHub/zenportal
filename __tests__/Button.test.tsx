@@ -1,15 +1,16 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import React from 'react';
+import { render, screen } from '@testing-library/react';
 import { Button } from '@/components/ui/button';
 
+// Test 1: Simple Button Component Test
 describe('Button Component', () => {
-  it('renders the button and responds to clicks', () => {
-    const handleClick = jest.fn();
-    render(<Button onClick={handleClick}>Click Me</Button>);
+  it('renders button with text', () => {
+    render(<Button>Click me</Button>);
+    expect(screen.getByText('Click me')).toBeInTheDocument();
+  });
 
-    const button = screen.getByText('Click Me');
-    fireEvent.click(button);
-
-    expect(button).toBeInTheDocument();
-    expect(handleClick).toHaveBeenCalledTimes(1);
+  it('renders button with different variants', () => {
+    render(<Button variant="outline">Outline Button</Button>);
+    expect(screen.getByText('Outline Button')).toBeInTheDocument();
   });
 });

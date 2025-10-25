@@ -14,6 +14,7 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 interface BillingData {
   user: {
@@ -23,6 +24,7 @@ interface BillingData {
       currentPeriodStart: string
       currentPeriodEnd: string
       cancelAtPeriodEnd: boolean
+      stripeCustomerId?: string
     } | null
   }
 }
@@ -48,14 +50,28 @@ export default function BillingPage() {
       const response = await fetch('/api/billing/portal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId: (data as any)?.user?.subscription?.stripeCustomerId }),
       })
+
+      if (!response.ok) {
+        const error = await response.json()
+        console.error('Billing portal error:', error)
+
+        // Show user-friendly error message
+        if (error.error === 'Internal server error') {
+          alert('Billing portal is not configured. Please set up your Stripe billing portal configuration in the Stripe Dashboard.')
+        } else {
+          alert(`Error: ${error.error}`)
+        }
+        return
+      }
+
       const { url } = await response.json()
       if (url) {
         window.location.href = url
       }
     } catch (error) {
       console.error('Error opening billing portal:', error)
+      alert('Failed to open billing portal. Please try again.')
     }
   }
 
@@ -66,12 +82,21 @@ export default function BillingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceId }),
       })
-      const { url } = await response.json()
-      if (url) {
-        window.location.href = url
+
+      const result = await response.json()
+
+      if (response.ok && result.url) {
+        window.location.href = result.url
+      } else {
+        toast.error("Subscription Error", {
+          description: result.error || "Failed to start checkout. Please try again."
+        })
       }
     } catch (error) {
       console.error('Error creating checkout session:', error)
+      toast.error("Checkout Error", {
+        description: "An unexpected error occurred. Please try again."
+      })
     }
   }
 
@@ -182,10 +207,12 @@ export default function BillingPage() {
                 )}
 
                 <div className="flex gap-2">
-                  <Button onClick={handleBillingPortal} className="gap-2">
-                    <ExternalLink className="h-4 w-4" />
-                    Manage Billing
-                  </Button>
+                  {subscription.stripeCustomerId && (
+                    <Button onClick={handleBillingPortal} className="gap-2">
+                      <ExternalLink className="h-4 w-4" />
+                      Manage Billing
+                    </Button>
+                  )}
                   {subscription.plan === 'FREE' && (
                     <Button variant="outline" onClick={() => startCheckout(process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID as string)}>
                       Upgrade to Starter

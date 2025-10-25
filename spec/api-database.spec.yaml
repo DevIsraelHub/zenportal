@@ -1,0 +1,319 @@
+metadata:
+  author: "Ejeh Israel"
+  date: "2025-01-17"
+  feature: "ZenPortal API & Database Integration"
+  version: "1.0.0"
+
+spec:
+  name: API & Database Integration System
+  description: |
+    RESTful API endpoints, Prisma ORM integration, MongoDB database operations,
+    and comprehensive data management with proper error handling.
+
+  scenarios:
+    - name: User data retrieval and management
+      steps:
+        - api_call: "GET /api/user"
+        - headers: { Authorization: "Bearer valid_token" }
+        - expect:
+            status: 200
+            response:
+              user:
+                id: "user_id"
+                email: "user@example.com"
+                name: "User Name"
+                auth0Id: "auth0|*"
+                subscription:
+                  status: "ACTIVE"
+                  plan: "STARTER"
+                  stripeCustomerId: "cus_*"
+
+    - name: User creation and upsert logic
+      steps:
+        - api_call: "POST /api/user"
+        - body:
+            email: "newuser@example.com"
+            name: "New User"
+            auth0Id: "auth0|newuser"
+        - expect:
+            status: 201
+            response:
+              user:
+                id: "new_user_id"
+                email: "newuser@example.com"
+                auth0Id: "auth0|newuser"
+        - verify_db:
+            collection: "users"
+            query: { email: "newuser@example.com" }
+            expect:
+              name: "New User"
+              auth0Id: "auth0|newuser"
+
+    - name: Email conflict resolution
+      steps:
+        - api_call: "POST /api/user"
+        - body:
+            email: "existing@example.com"
+            auth0Id: "auth0|newauth0id"
+        - expect:
+            status: 200
+            response:
+              user:
+                email: "existing@example.com"
+                auth0Id: "auth0|newauth0id"
+        - verify_db:
+            collection: "users"
+            query: { email: "existing@example.com" }
+            expect:
+              auth0Id: "auth0|newauth0id"
+
+    - name: Subscription creation and updates
+      steps:
+        - api_call: "POST /api/subscriptions"
+        - body:
+            userId: "user_id"
+            plan: "STARTER"
+            status: "ACTIVE"
+            stripeCustomerId: "cus_*"
+        - expect:
+            status: 201
+            response:
+              subscription:
+                plan: "STARTER"
+                status: "ACTIVE"
+                stripeCustomerId: "cus_*"
+
+    - name: Subscription status updates
+      steps:
+        - api_call: "PATCH /api/subscriptions"
+        - body:
+            userId: "user_id"
+            status: "CANCELED"
+        - expect:
+            status: 200
+            response:
+              subscription:
+                status: "CANCELED"
+        - verify_db:
+            collection: "subscriptions"
+            query: { userId: "user_id" }
+            expect:
+              status: "CANCELED"
+
+    - name: Usage tracking and retrieval
+      steps:
+        - api_call: "POST /api/usage"
+        - body:
+            userId: "user_id"
+            type: "AI_REQUEST"
+            amount: 25
+            description: "Code completion"
+        - expect:
+            status: 201
+            response:
+              usage:
+                id: "usage_id"
+                type: "AI_REQUEST"
+                amount: 25
+        - api_call: "GET /api/usage"
+        - query_params: { userId: "user_id" }
+        - expect:
+            response:
+              usage:
+                - type: "AI_REQUEST"
+                  amount: 25
+                  createdAt: "2025-01-17T*"
+
+    - name: Database connection and error handling
+      steps:
+        - mock_database: "connection_failure"
+        - api_call: "GET /api/user"
+        - expect:
+            status: 500
+            response:
+              error: "Database connection failed"
+        - mock_database: "normal"
+        - api_call: "GET /api/user"
+        - expect:
+            status: 200
+
+    - name: Prisma ORM query optimization
+      steps:
+        - api_call: "GET /api/user"
+        - expect:
+            database_queries:
+              - "Single user query with subscription include"
+              - "No N+1 query problems"
+              - "Efficient joins"
+
+    - name: Data validation and sanitization
+      steps:
+        - api_call: "POST /api/user"
+        - body:
+            email: "invalid-email"
+            name: "<script>alert('xss')</script>"
+        - expect:
+            status: 400
+            response:
+              error: "Invalid email format"
+        - api_call: "POST /api/user"
+        - body:
+            email: "valid@example.com"
+            name: "Sanitized Name"
+        - expect:
+            status: 201
+            response:
+              user:
+                name: "Sanitized Name"
+
+    - name: MongoDB ObjectId handling
+      steps:
+        - api_call: "GET /api/user"
+        - expect:
+            response:
+              user:
+                id: "ObjectId_format"
+                subscription:
+                  id: "ObjectId_format"
+        - api_call: "POST /api/subscriptions"
+        - body:
+            userId: "ObjectId_format"
+            plan: "CORE"
+        - expect:
+            status: 201
+
+    - name: Database transaction handling
+      steps:
+        - api_call: "POST /api/user"
+        - body:
+            email: "transaction@example.com"
+            subscription:
+              plan: "STARTER"
+              status: "ACTIVE"
+        - expect:
+            transaction: "Atomic operation"
+            both_created: "User and subscription"
+        - verify_db:
+            collections:
+              - "users: transaction@example.com exists"
+              - "subscriptions: associated subscription exists"
+
+    - name: Error response standardization
+      steps:
+        - api_call: "GET /api/nonexistent"
+        - expect:
+            status: 404
+            response:
+              error: "Not Found"
+        - api_call: "POST /api/user"
+        - headers: { Authorization: "invalid_token" }
+        - expect:
+            status: 401
+            response:
+              error: "Unauthorized"
+        - api_call: "POST /api/user"
+        - body: {}
+        - expect:
+            status: 400
+            response:
+              error: "Missing required fields"
+
+    - name: API rate limiting and security
+      steps:
+        - api_call: "GET /api/user"
+        - headers: { Authorization: "Bearer valid_token" }
+        - expect:
+            status: 200
+        - repeat_request: 100
+        - expect:
+            rate_limit: "Applied after threshold"
+            status: 429
+            response:
+              error: "Too Many Requests"
+
+    - name: Database indexing and performance
+      steps:
+        - verify_db:
+            indexes:
+              - "users.email: unique index"
+              - "users.auth0Id: unique index"
+              - "subscriptions.userId: unique index"
+              - "subscriptions.stripeCustomerId: unique index"
+              - "usage.userId: index for queries"
+              - "usage.createdAt: index for date queries"
+
+    - name: Data consistency and integrity
+      steps:
+        - api_call: "DELETE /api/user"
+        - body: { userId: "user_id" }
+        - expect:
+            cascade_delete:
+              - "User deleted"
+              - "Associated subscription deleted"
+              - "Associated usage records deleted"
+        - verify_db:
+            collections:
+              - "users: user_id not found"
+              - "subscriptions: user_id subscription not found"
+              - "usage: user_id usage records not found"
+
+    - name: API versioning and backward compatibility
+      steps:
+        - api_call: "GET /api/v1/user"
+        - expect:
+            status: 200
+            response_format: "v1 schema"
+        - api_call: "GET /api/user"
+        - expect:
+            status: 200
+            response_format: "latest schema"
+
+    - name: Database backup and recovery
+      steps:
+        - api_call: "POST /api/admin/backup"
+        - headers: { Authorization: "admin_token" }
+        - expect:
+            status: 200
+            response:
+              backup_id: "backup_*"
+              status: "completed"
+        - api_call: "POST /api/admin/restore"
+        - body: { backup_id: "backup_*" }
+        - expect:
+            status: 200
+            response:
+              status: "restored"
+
+    - name: Real-time data synchronization
+      steps:
+        - api_call: "POST /api/usage/track"
+        - body: { type: "AI_REQUEST", amount: 10 }
+        - expect:
+            status: 201
+        - api_call: "GET /api/user"
+        - expect:
+            response:
+              user:
+                usage:
+                  - amount: 10
+                    createdAt: "recent_timestamp"
+
+    - name: Database connection pooling
+      steps:
+        - concurrent_requests: 50
+        - api_call: "GET /api/user"
+        - expect:
+            connection_pool: "Efficiently managed"
+            response_time: "< 100ms"
+            no_connection_errors: true
+
+    - name: Data migration and schema updates
+      steps:
+        - api_call: "POST /api/admin/migrate"
+        - headers: { Authorization: "admin_token" }
+        - body: { version: "1.1.0" }
+        - expect:
+            status: 200
+            response:
+              migration_status: "completed"
+              schema_version: "1.1.0"
